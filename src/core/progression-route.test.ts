@@ -215,7 +215,7 @@ describe("buildProgressionRoute", () => {
       .steps.find((step) => step.kind === "passive_tree");
 
     expect(mismatch).toMatchObject({
-      status: "needs_curated_data",
+      status: "needs_personal_and_curated_data",
       passiveTree: { comparison: "version_mismatch" },
     });
     expect(mismatch?.passiveTree).not.toHaveProperty("addedNodeIds");
@@ -243,8 +243,11 @@ describe("buildProgressionRoute", () => {
       treeVersion: "3_26",
       sourceFile: "data.json",
       importedAt: "2026-10-05T00:00:00.000Z",
+      classStartNodeIds: { Witch: 1 },
       nodes: {
-        "3": { id: 3, name: "Heart of Flame", kind: "notable" as const, stats: ["10% increased Fire Damage"] },
+        "1": { id: 1, name: "WITCH", stats: [], neighbors: [2] },
+        "2": { id: 2, name: "Path", stats: [], neighbors: [1, 3] },
+        "3": { id: 3, name: "Heart of Flame", kind: "notable" as const, stats: ["10% increased Fire Damage"], neighbors: [2] },
       },
     };
     const matched = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION, passiveTreeData: data })
@@ -259,16 +262,106 @@ describe("buildProgressionRoute", () => {
     expect(matched?.passiveTree).toMatchObject({
       addedNodeIds: [3],
       addedNodes: [{ id: 3, name: "Heart of Flame", kind: "notable" }],
+      allocationOrderStatus: "complete",
+      allocationOrder: [{ id: 3, name: "Heart of Flame" }],
     });
     expect(matched?.action).toContain("Heart of Flame");
-    expect(matched?.action).toContain("not an ordered leveling path");
+    expect(matched?.passiveTree?.allocationOrderNote).toContain("not a PoB-authored or performance-optimized leveling order");
     expect(matched?.evidence).toContainEqual(expect.objectContaining({
       source: "local_tree_export",
       version: "3_26",
       reference: "data.json",
     }));
     expect(wrongVersion?.passiveTree).not.toHaveProperty("addedNodes");
+    expect(wrongVersion?.passiveTree?.allocationOrderStatus).toBe("unavailable");
     expect(wrongVersion?.evidence).not.toContainEqual(expect.objectContaining({ source: "local_tree_export" }));
+  });
+
+  it("orders a target tree from its class start when no current allocation is available", () => {
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      className: "Witch",
+      role: "NEXT",
+      passiveSpecs: [{ id: 4, name: "Target", treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2, 3, 4, 5] }],
+    };
+    const passiveTreeData = {
+      treeVersion: "3_26",
+      sourceFile: "data.json",
+      importedAt: "2026-10-05T00:00:00.000Z",
+      classStartNodeIds: { Witch: 1 },
+      nodes: {
+        "1": { id: 1, name: "WITCH", stats: [], neighbors: [2] },
+        "2": { id: 2, name: "Path", stats: [], neighbors: [1, 3, 4] },
+        "3": { id: 3, name: "Branch A", stats: [], neighbors: [2] },
+        "4": { id: 4, name: "Branch B", stats: [], neighbors: [2, 5] },
+        "5": { id: 5, name: "Notable", stats: [], neighbors: [4] },
+      },
+    };
+    const route = buildProgressionRoute({ build: targetBuild, progression: PROGRESSION, passiveTreeData });
+    const step = route.steps.find((item) => item.kind === "passive_tree");
+
+    expect(step?.passiveTree).toMatchObject({
+      comparison: "missing_current",
+      allocationOrderStatus: "complete",
+      allocationOrder: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }],
+    });
+    expect(step?.passiveTree?.allocationOrderNote).toContain("from the class start node");
+    expect(step?.passiveTree?.allocationOrderNote).toContain("not a PoB-authored or performance-optimized leveling order");
+  });
+
+  it("seeds same-version allocation order from retained current nodes and reports disconnected gaps", () => {
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      role: "ACTIVE",
+      passiveSpecs: [{ id: 1, treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2] }],
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      passiveSpecs: [{ id: 2, treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2, 3, 4, 9] }],
+    };
+    const passiveTreeData = {
+      treeVersion: "3_26",
+      sourceFile: "data.json",
+      importedAt: "2026-10-05T00:00:00.000Z",
+      nodes: {
+        "1": { id: 1, stats: [], neighbors: [2] },
+        "2": { id: 2, stats: [], neighbors: [1, 3, 4] },
+        "3": { id: 3, stats: [], neighbors: [2] },
+        "4": { id: 4, stats: [], neighbors: [2] },
+        "9": { id: 9, stats: [] },
+      },
+    };
+    const step = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION, passiveTreeData })
+      .steps.find((item) => item.kind === "passive_tree");
+
+    expect(step?.passiveTree).toMatchObject({
+      allocationOrderStatus: "partial",
+      allocationOrder: [{ id: 3 }, { id: 4 }],
+      allocationOrderMissingNodeIds: [9],
+    });
+    expect(step?.passiveTree?.allocationOrderNote).toContain("list is incomplete");
+  });
+
+  it("withholds target order when class-start or imported tree topology is unavailable", () => {
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      className: undefined,
+      role: "NEXT",
+      passiveSpecs: [{ id: 2, treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2] }],
+    };
+    const passiveTreeData = {
+      treeVersion: "3_26",
+      sourceFile: "legacy-data.json",
+      importedAt: "2026-10-05T00:00:00.000Z",
+      nodes: { "1": { id: 1, stats: [] }, "2": { id: 2, stats: [] } },
+    };
+    const step = buildProgressionRoute({ build: targetBuild, progression: PROGRESSION, passiveTreeData })
+      .steps.find((item) => item.kind === "passive_tree");
+
+    expect(step?.passiveTree?.allocationOrderStatus).toBe("unavailable");
+    expect(step?.passiveTree?.allocationOrder).toBeUndefined();
+    expect(step?.passiveTree?.allocationOrderNote).toContain("PoB class is missing");
   });
 
   it("marks recipes, atlas routes, passive nodes, and filter rules as needing curated data", () => {

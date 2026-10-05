@@ -16,7 +16,7 @@
 
 - Preserve every named PoB passive spec, its tree version, and numeric node IDs.
 - Compare imported target specs against the ACTIVE PoB tree only when both tree versions match; show added/removed node IDs and withhold differences across missing or mismatched versions.
-- Optionally load a player-selected local GGG passive-tree JSON export to label differences when its player-confirmed version matches both specs. Store only relevant node names/stats locally; do not bundle the unlicensed export.
+- Optionally load a player-selected local GGG passive-tree JSON export to label same-version differences and retain relevant graph links/class starts. Use a deterministic breadth-first traversal from retained nodes or class start when topology is complete; do not bundle the export.
 - Present saved specs as author-provided alternatives. Their XML order is preserved but is not treated as a verified leveling sequence, and no respec cost or passive optimization is inferred.
 - Define an ordered typed route with stable step IDs, goal links, prerequisites, evidence, confidence, and a game-data version.
 - Generate only steps supported by imported state or curated versioned data; show “needs data” for everything else.
@@ -48,7 +48,7 @@
 - Compare current and target gear to identify slot-level upgrade gaps, stash-owned inputs, and achievable crafts.
 - Generate step-by-step deterministic crafts, including base requirements, materials, unlocks, operation order, expected risk, and stop conditions.
 - Recommend target-farm methods and the corresponding Atlas passives using item source data and the player's owned maps/trees.
-- Turn PoB named specs into ordered character-tree milestones; do not compare or prescribe when tree versions mismatch.
+- **Partially delivered:** Turn saved PoB specs into an inspectable graph traversal when the player imports matching local tree topology. This ordering is not a PoB-authored or optimized leveling guide. Do not compare node IDs across tree versions; next add progression checkpoints and reviewed class/tree guidance.
 - Model campaign-to-mapping checkpoints, map sustain, resistance/life/defense readiness, boss readiness, and build-transition readiness.
 - Make each item/route inspectable with current gap, reason, prerequisites, source, patch, confidence, and “not relevant” feedback.
 
@@ -76,4 +76,4 @@ With a current character, league stash/Atlas snapshot, and imported target PoB, 
 
 ## Current verification record
 
-On 2026-10-05, the latest source passed 31 unit tests, the `http-cache-semantics` max-stale security regression check, and the TypeScript/Vite production build. A Windows portable preview package was produced; its first package launch showed a responsive app window. The final local package remains unsigned and has not been published. The desktop automation surface was unavailable in this session, so the optional tree import flow was not clicked through manually. Same-version PoB passive specs produce exact added/removed node-ID comparisons; a player-selected local tree export can add names and stats only when the confirmed version matches both specs. Mismatched versions still produce no inferred delta. Account import remains blocked by GGG OAuth registration availability; verified craft recipes, target farms/Atlas trees, ordered passive routes, and direct customized-filter generation still require reviewed game data and further integration work.
+On 2026-10-05, the source passed 41 unit tests, the `http-cache-semantics` max-stale security regression check, and the TypeScript/Vite production build. The current Electron renderer was exercised with a synthetic same-version current/target tree; the route inspector showed the two named target nodes in deterministic order. A Windows portable preview package was produced earlier; its first package launch showed a responsive app window. The final local package remains unsigned and has not been published. Same-version PoB passive specs produce exact added/removed node-ID comparisons. A player-selected local tree export can add node names/stats and, when its confirmed version matches and links are complete, generate a deterministic graph traversal from retained current nodes or the class start. Partial/disconnected data is labeled, version mismatches suppress cross-version comparison, and the traversal is not an optimized leveling guide. Account import remains blocked by GGG OAuth registration availability; verified craft recipes, target farms/Atlas trees, and direct customized-filter generation still require reviewed game data and further integration work.

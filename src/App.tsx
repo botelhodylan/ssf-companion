@@ -483,7 +483,7 @@ export default function App() {
     try {
       const imported = parsePassiveTreeExport(file.content, passiveTreeImportVersion, file.name, relevantNodeIds);
       setPassiveTreeData(imported);
-      notify(`Loaded ${Object.keys(imported.nodes).length} passive-node names for tree ${imported.treeVersion}.`);
+      notify(`Loaded ${Object.keys(imported.nodes).length} relevant tree nodes for ${imported.treeVersion}.`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "The passive-tree export could not be imported.");
     }
@@ -968,11 +968,11 @@ export default function App() {
               <p className="route-context-note">{snapshotNote}</p>
             </section>
 
-            <section className="route-tree-data" aria-label="Passive tree name data">
+            <section className="route-tree-data" aria-label="Local passive tree data">
               <div className="route-tree-data-copy">
                 <span className="section-kicker">OPTIONAL LOCAL DATA</span>
-                <strong>Resolve passive-node names</strong>
-                <p>Load a GGG passive-tree JSON export to label exact PoB node differences. The export does not include its patch version, so confirm the version shown in your PoB spec.</p>
+                <strong>Resolve passive nodes and route order</strong>
+                <p>Load a GGG passive-tree JSON export to label PoB node differences and suggest an allocation order from its graph links. Confirm the version shown in your PoB spec; this is not an optimized leveling guide.</p>
                 <button className="text-link" type="button" onClick={() => void openTrustedLink("https://github.com/grindinggear/skilltree-export")}>Open GGG tree exports <ExternalLink size={13} /></button>
               </div>
               <div className="route-tree-data-controls">
@@ -985,13 +985,13 @@ export default function App() {
                 <button className="button button-outline" type="button" onClick={() => void openPassiveTreeDataFile()} disabled={!passiveTreeImportVersion}>Import tree JSON</button>
                 {passiveTreeData && (
                   <div className="route-tree-data-status" role="status">
-                    <span>{Object.keys(passiveTreeData.nodes).length} node labels loaded · tree {passiveTreeData.treeVersion} · {passiveTreeData.sourceFile}</span>
+                    <span>{Object.keys(passiveTreeData.nodes).length} nodes indexed · {Object.values(passiveTreeData.nodes).filter((node) => node.neighbors?.length).length} with links · tree {passiveTreeData.treeVersion} · {passiveTreeData.sourceFile}</span>
                     <button className="text-link" type="button" onClick={() => setPassiveTreeData(null)}>Clear</button>
                   </div>
                 )}
               </div>
               <input ref={passiveTreeFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserPassiveTreeFileChosen(event)} />
-              <p className="route-tree-data-note">The app stores only the selected node names for your imported builds on this device. It does not include GGG tree data in the installer.</p>
+              <p className="route-tree-data-note">The app stores only relevant PoB node labels and links on this device. It does not include GGG tree data in the installer.</p>
             </section>
 
             <div className="route-layout">
@@ -1033,6 +1033,23 @@ export default function App() {
                         <div className="route-evidence">
                           <span>Spec {selectedRouteStep.passiveTree.specId} · {selectedRouteStep.passiveTree.specName} · tree {selectedRouteStep.passiveTree.treeVersion ?? "unknown"}</span>
                           <p>{selectedRouteStep.passiveTree.targetNodeCount} target node IDs · comparison: {selectedRouteStep.passiveTree.comparison.replaceAll("_", " ")}</p>
+                          <div className={`passive-allocation-order passive-allocation-${selectedRouteStep.passiveTree.allocationOrderStatus}`}>
+                            <div>
+                              <strong>Suggested allocation order</strong>
+                              <span>{selectedRouteStep.passiveTree.allocationOrderStatus}</span>
+                            </div>
+                            <p>{selectedRouteStep.passiveTree.allocationOrderNote}</p>
+                            {selectedRouteStep.passiveTree.allocationOrder?.length ? (
+                              <details>
+                                <summary>View {selectedRouteStep.passiveTree.allocationOrder.length} ordered nodes</summary>
+                                <ol>{selectedRouteStep.passiveTree.allocationOrder.map((node, index) => (
+                                  <li key={`${node.id}-${index}`}>
+                                    <span>{node.name ?? node.stats[0] ?? `Node ${node.id}`}</span><small>#{node.id}{node.kind ? ` · ${node.kind}` : ""}</small>
+                                  </li>
+                                ))}</ol>
+                              </details>
+                            ) : null}
+                          </div>
                           {selectedRouteStep.passiveTree.comparison === "compared" && (
                             <details className="passive-node-id-list">
                               <summary>View exact allocation differences</summary>
@@ -1060,7 +1077,7 @@ export default function App() {
                                   ))}</ul>
                                 ) : null}
                               </div>
-                              {selectedRouteStep.passiveTree.addedNodes?.length ? <p className="passive-node-caveat">Names come from local tree {selectedRouteStep.passiveTree.treeVersion} data. This set difference does not provide a leveling order or refund cost.</p> : null}
+                              {selectedRouteStep.passiveTree.addedNodes?.length ? <p className="passive-node-caveat">Node names come from local tree {selectedRouteStep.passiveTree.treeVersion} data. This difference does not estimate refund cost.</p> : null}
                             </details>
                           )}
                         </div>

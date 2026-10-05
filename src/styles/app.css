@@ -690,6 +690,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .passive-node-id-list { margin-top: 8px; color: #a7aaa2; font-size: 9px; line-height: 1.5; }
 .passive-node-id-list summary { color: #c7a16f; cursor: pointer; }
 .passive-node-id-list p { overflow-wrap: anywhere; }
+.passive-allocation-order { margin-top: 10px; padding: 8px; border: 1px solid #343b39; background: #171d1d; }
+.passive-allocation-order > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.passive-allocation-order > div > strong { color: #d8d0c3; font-size: 9px; }
+.passive-allocation-order > div > span { color: #8f9c91; font-size: 8px; text-transform: uppercase; }
+.passive-allocation-complete > div > span { color: #a9bf91; }
+.passive-allocation-partial > div > span { color: #d6ad70; }
+.passive-allocation-order > p { margin: 5px 0 0; color: #89918a; font-size: 8px; line-height: 1.5; }
+.passive-allocation-order details { margin-top: 7px; color: #a7aaa2; font-size: 9px; line-height: 1.5; }
+.passive-allocation-order summary { color: #c7a16f; cursor: pointer; }
+.passive-allocation-order ol { display: flex; flex-direction: column; gap: 3px; max-height: 260px; overflow: auto; margin: 6px 0 0; padding: 0 6px 0 24px; }
+.passive-allocation-order li { padding: 4px 5px; border-left: 1px solid #554832; background: #1e2424; }
+.passive-allocation-order li::marker { color: #bc995f; }
+.passive-allocation-order li > span { color: #d9d2c6; font-size: 8px; }
+.passive-allocation-order li > small { display: block; color: #888f88; font-size: 7px; }
 .passive-node-group { margin-top: 9px; }
 .passive-node-group > strong { color: #d5cdbf; font-size: 9px; }
 .passive-node-group > p { margin: 4px 0; overflow-wrap: anywhere; color: #87908a; }

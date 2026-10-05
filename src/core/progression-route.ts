@@ -1,8 +1,8 @@
 import { poe1Provider } from "./game-provider";
-import type { PassiveNodeFact, PassiveTreeDataset } from "./passive-tree-data";
+import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeDataset } from "./passive-tree-data";
 import type { BuildManifest, BuildRole, ItemGoal, ProgressionStage } from "./types";
 
-export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.1.0" as const;
+export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.2.0" as const;
 
 export type RouteEvidenceSource =
   | "route_rules"
@@ -40,6 +40,11 @@ export interface PassiveTreeComparison {
   readonly removedNodeIds?: readonly number[];
   readonly addedNodes?: readonly PassiveNodeFact[];
   readonly removedNodes?: readonly PassiveNodeFact[];
+  /** Deterministic graph traversal from retained nodes or the class start. */
+  readonly allocationOrder?: readonly PassiveNodeFact[];
+  readonly allocationOrderStatus: "complete" | "partial" | "unavailable";
+  readonly allocationOrderMissingNodeIds?: readonly number[];
+  readonly allocationOrderNote: string;
 }
 
 export interface RouteEvidence {
@@ -504,17 +509,45 @@ function buildPassiveTreeSteps(input: {
       ? currentNodeIds.filter((nodeId) => !targetNodeSet.has(nodeId))
       : undefined;
     const hasNodeDifference = Boolean(addedNodeIds?.length || removedNodeIds?.length);
-    const canResolveNodeNames = comparison === "compared"
-      && hasNodeDifference
-      && Boolean(targetVersion)
-      && passiveTreeData?.treeVersion === targetVersion;
+    const matchingTreeData = Boolean(targetVersion && passiveTreeData?.treeVersion === targetVersion);
+    const canResolveNodeNames = comparison === "compared" && hasNodeDifference && matchingTreeData;
     const factsFor = (nodeIds: readonly number[] | undefined): PassiveNodeFact[] | undefined => {
-      if (!canResolveNodeNames || !nodeIds || !passiveTreeData) return undefined;
+      if (!matchingTreeData || !nodeIds || !passiveTreeData) return undefined;
       return nodeIds.map((nodeId) => passiveTreeData.nodes[String(nodeId)] ?? { id: nodeId, stats: [] });
     };
     const addedNodes = factsFor(addedNodeIds);
     const removedNodes = factsFor(removedNodeIds);
+    const retainedNodeIds = comparison === "compared"
+      ? targetNodeIds.filter((nodeId) => currentNodeSet.has(nodeId))
+      : undefined;
+    const allocationResult = matchingTreeData && targetVersion && passiveTreeData
+      ? orderPassiveTreeAllocations({
+          dataset: passiveTreeData,
+          treeVersion: targetVersion,
+          targetNodeIds,
+          className: build.className,
+          ...(retainedNodeIds ? { retainedNodeIds } : {}),
+        })
+      : {
+          status: "unavailable" as const,
+          nodeIds: [] as readonly number[],
+          missingNodeIds: [] as readonly number[],
+          note: targetVersion
+            ? `Import the local tree export for ${targetVersion} to generate a topology-based allocation order.`
+            : "The PoB tree version is missing. Confirm a version before importing local tree topology.",
+        };
+    const allocationOrderNodes = allocationResult.nodeIds.map((nodeId) =>
+      passiveTreeData?.nodes[String(nodeId)] ?? { id: nodeId, stats: [] },
+    );
     const requiredData: RouteDataRequirement[] = [];
+
+    if (allocationResult.status === "unavailable") {
+      requiredData.push({
+        category: "personal",
+        key: "poe1_passive_tree_order_data",
+        description: allocationResult.note,
+      });
+    }
 
     if (comparison === "missing_current") {
       requiredData.push({
@@ -544,6 +577,10 @@ function buildPassiveTreeSteps(input: {
       ...(removedNodeIds ? { removedNodeIds } : {}),
       ...(addedNodes ? { addedNodes } : {}),
       ...(removedNodes ? { removedNodes } : {}),
+      ...(allocationOrderNodes.length ? { allocationOrder: allocationOrderNodes } : {}),
+      allocationOrderStatus: allocationResult.status,
+      ...(allocationResult.missingNodeIds.length ? { allocationOrderMissingNodeIds: allocationResult.missingNodeIds } : {}),
+      allocationOrderNote: allocationResult.note,
     } satisfies NonNullable<ProgressionRouteStep["passiveTree"]>;
     const aligned = comparison === "compared" && addedNodeIds?.length === 0 && removedNodeIds?.length === 0;
     const namedAdded = addedNodes?.filter((node) => node.name || node.stats.length > 0) ?? [];
@@ -555,15 +592,20 @@ function buildPassiveTreeSteps(input: {
       ? `omitted ACTIVE nodes such as ${namedRemoved.slice(0, 3).map(passiveNodeLabel).join(", ") || "unmapped nodes"}`
       : "no ACTIVE nodes omitted";
     const nodeSummary = canResolveNodeNames
-      ? ` Matching local tree data identifies ${addedSummary} and ${removedSummary}. This is an allocation set difference, not an ordered leveling path.`
+      ? ` Matching local tree data identifies ${addedSummary} and ${removedSummary}.`
       : "";
+    const allocationSummary = allocationResult.status === "complete"
+      ? " A suggested allocation traversal is available below."
+      : allocationResult.status === "partial"
+        ? " A partial allocation traversal is available below; it omits nodes the imported links could not connect."
+        : " No allocation order is shown until matching local tree links are available.";
     const action = comparison === "compared"
       ? aligned
-        ? `This target PoB spec exactly matches the ACTIVE spec “${passiveTree.baselineSpecName}” by node ID in tree ${targetVersion}. The route preserves the saved spec; it does not independently rank or optimize passives.`
-        : `Load the target spec in Path of Building and review its allocation difference from ACTIVE “${passiveTree.baselineSpecName}” in tree ${targetVersion}: add ${addedNodeIds?.length ?? 0} node IDs and review ${removedNodeIds?.length ?? 0} ACTIVE nodes omitted by the target.${nodeSummary} The route does not estimate respec cost or optimize nodes.`
+        ? `This target PoB spec exactly matches the ACTIVE spec “${passiveTree.baselineSpecName}” by node ID in tree ${targetVersion}. The route preserves the saved spec and does not independently rank or optimize passives.${allocationSummary}`
+        : `Load the target spec in Path of Building and review its allocation difference from ACTIVE “${passiveTree.baselineSpecName}” in tree ${targetVersion}: add ${addedNodeIds?.length ?? 0} node IDs and review ${removedNodeIds?.length ?? 0} ACTIVE nodes omitted by the target.${nodeSummary} The route does not estimate respec cost or optimize nodes.${allocationSummary}`
       : comparison === "missing_current"
-        ? `Load this saved PoB spec in Path of Building: ${targetName} (${targetVersion ?? "tree version not recorded"}, ${targetNodeIds.length} allocated node IDs). The target tree is preserved, but no current-tree gap is claimed without an ACTIVE node snapshot.`
-        : `Load this saved PoB spec in Path of Building: ${targetName} (${targetVersion ?? "tree version not recorded"}, ${targetNodeIds.length} allocated node IDs). The target is exact source data, but its node IDs are not compared because the ACTIVE and target tree versions are missing or differ.`;
+        ? `Load this saved PoB spec in Path of Building: ${targetName} (${targetVersion ?? "tree version not recorded"}, ${targetNodeIds.length} allocated node IDs). The target tree is preserved, but no current-tree gap is claimed without an ACTIVE node snapshot.${allocationSummary}`
+        : `Load this saved PoB spec in Path of Building: ${targetName} (${targetVersion ?? "tree version not recorded"}, ${targetNodeIds.length} allocated node IDs). Its node IDs are not compared because the ACTIVE and target tree versions are missing or differ.${allocationSummary}`;
     const currentBuildEvidence: RouteEvidence[] = currentBuild && currentSpec
       ? [{
           source: "build_manifest",
@@ -572,12 +614,12 @@ function buildPassiveTreeSteps(input: {
           detail: `ACTIVE baseline spec ${passiveTree.baselineSpecName ?? "unknown"} uses tree ${currentVersion ?? "unknown"} with ${currentNodeIds.length} node IDs.`,
         }]
       : [];
-    const treeDataEvidence: RouteEvidence[] = canResolveNodeNames && passiveTreeData
+    const treeDataEvidence: RouteEvidence[] = matchingTreeData && passiveTreeData
       ? [{
           source: "local_tree_export",
           version: passiveTreeData.treeVersion,
           reference: passiveTreeData.sourceFile,
-          detail: "Node names and stat descriptions were resolved from a player-selected local tree export. Its patch version was confirmed by the player because the export file does not declare it.",
+          detail: "Node labels and graph links were resolved from a player-selected local tree export. Its tree version was confirmed by the player from the imported PoB spec; the route traversal follows these links and does not optimize the allocation order.",
         }]
       : [];
 
