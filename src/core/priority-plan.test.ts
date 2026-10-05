@@ -85,5 +85,38 @@ describe("priority plan export", () => {
     expect(guide).toContain("My Modules → Create new module");
     expect(guide).toContain("Overview → Modules");
     expect(guide).toContain("it cannot be uploaded as a module");
+
+    const auditedGuide = serializePriorityPlan(plan, "markdown", {
+      sourceFile: "NeverSink.filter",
+      activeRuleCount: 12,
+      importCount: 2,
+      limitations: ["Candidate BaseType references only."],
+      targets: [{
+        item: "The Taming",
+        baseType: "Prismatic Ring",
+        status: "references_found",
+        rules: [{
+          order: 4,
+          line: 18,
+          effect: "Show",
+          filterBladeRuleId: "uniques;tier2",
+          baseTypeClauses: [{
+            text: 'BaseType "Prismatic Ring"',
+            values: ["Prismatic Ring"],
+            relation: "include",
+            exact: false,
+            mentionsTarget: true,
+          }],
+          otherRuleLines: ["Rarity Unique"],
+          presentation: ["SetFontSize 40", "PlayAlertSound 5 300"],
+          continues: false,
+        }],
+      }],
+    });
+    expect(auditedGuide).toContain("Optional read-only audit of your current filter");
+    expect(auditedGuide).toContain("NeverSink.filter");
+    expect(auditedGuide).toContain("FilterBlade ID `uniques;tier2`");
+    expect(auditedGuide).toContain("Existing presentation: `SetFontSize 40`; `PlayAlertSound 5 300`");
+    expect(auditedGuide).toContain("not proof that an item will show or hide");
   });
 });

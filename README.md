@@ -11,7 +11,7 @@ This is an early, source-available build. The initial distribution target is a p
 - Produce deterministic item-priority recommendations with a “Why am I seeing this?” explanation.
 - Preserve all named passive-tree specs, node IDs, and tree versions from imported PoB builds. Optionally load a local GGG tree JSON export to label nodes and create a deterministic graph traversal from the class start or same-version retained allocations; no GGG tree data is bundled. This order is not a PoB-authored or optimized leveling guide.
 - Show a deterministic progression-route foundation for gear, crafting, farming/Atlas, passive trees, and loot priorities. Each step includes evidence, rule version, confidence, and explicit player/game-data gaps.
-- Export a FilterBlade handoff guide (Markdown), plus JSON/CSV priority data with reasons and matched builds. The guide is for manual review inside the existing FilterBlade setup; it does not rewrite an existing filter or game files.
+- Export a FilterBlade handoff guide (Markdown), plus JSON/CSV priority data with reasons and matched builds. After a local audit, the guide can include candidate rule IDs, conditions, and existing presentation directives so you can review the exact rule in FilterBlade; it does not rewrite an existing filter or game files.
 - Optionally audit a player-selected `.filter` export locally to find candidate `BaseType` mentions for current priorities, with rule order, FilterBlade IDs, other rule lines, existing style/sound directives, and `Continue` markers. The audit is read-only, partial, and does not follow `Import` files.
 - Run without an account connection. GGG OAuth account sync is shown as unavailable until GGG accepts new OAuth application registrations.
 

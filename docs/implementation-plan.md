@@ -56,6 +56,7 @@
 
 - **V1 delivered:** Export a manual Markdown review guide and semantic JSON/CSV priorities with target bases, roles, scores, and explanations. The guide is explicit that it is not a FilterBlade-importable module, gives FilterBlade's own module reuse path, and says lower priority is not a hide instruction.
 - **V1 delivered:** Optionally audit a selected local `.filter` export read-only. The audit shows candidate `BaseType` mentions with rule order/line, `$type`/`$tier` identifiers, related rule lines, recognized style/sound directives, `Continue`, and un-followed `Import` counts. It does not evaluate all conditions, claim final show/hide behavior, upload, or write filter contents.
+- **V1 delivered:** Export the current priority plan with the matching local audit in one Markdown handoff. It includes bounded candidate rule references and their existing conditions/presentation next to target items, while preserving the audit limitations and discarding the raw filter text.
 - **Research gate:** FilterBlade's public `.options` DSL configures its customizer UI; no public per-player priority import API is verified. The game filter grammar supports `Import` and `Continue`, but style-preserving overlay behavior is not verified, so the app still does not write `.filter` files.
 - Prototype a semantic adapter against versioned base filters and sample custom styles/sounds.
 - Preserve the chosen style, colors, sounds, strictness, and existing rule IDs; add only transparent semantic priority overlays.

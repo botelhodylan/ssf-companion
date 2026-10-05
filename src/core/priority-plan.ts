@@ -1,4 +1,5 @@
 import type { BuildManifest, BuildRole, ItemRelevance, ProgressionStage } from "./types";
+import type { FilterBladeAudit } from "./filterblade-audit";
 
 export interface PriorityPlanBuild {
   readonly id: string;
@@ -61,9 +62,13 @@ export function buildPriorityPlan(input: {
   };
 }
 
-export function serializePriorityPlan(plan: PriorityPlan, format: PriorityPlanFormat): string {
+export function serializePriorityPlan(
+  plan: PriorityPlan,
+  format: PriorityPlanFormat,
+  filterAudit?: FilterBladeAudit,
+): string {
   if (format === "json") return JSON.stringify(plan, null, 2);
-  if (format === "markdown") return serializeFilterBladeHandoff(plan);
+  if (format === "markdown") return serializeFilterBladeHandoff(plan, filterAudit);
   return [
     ["item", "base_type", "score", "recommendation", "matched_builds", "why"].map(csvCell).join(","),
     ...plan.priorities.map((priority) => [
@@ -77,7 +82,7 @@ export function serializePriorityPlan(plan: PriorityPlan, format: PriorityPlanFo
   ].join("\r\n");
 }
 
-function serializeFilterBladeHandoff(plan: PriorityPlan): string {
+function serializeFilterBladeHandoff(plan: PriorityPlan, filterAudit?: FilterBladeAudit): string {
   const lines = [
     "# SSF Companion → FilterBlade handoff",
     "",
@@ -106,6 +111,7 @@ function serializeFilterBladeHandoff(plan: PriorityPlan): string {
     "",
     "This generated guide is reference text only; it cannot be uploaded as a module.",
     "",
+    ...(filterAudit ? serializeFilterAudit(filterAudit) : []),
     "## Targets",
     "",
     "| Target / base type | SSF priority | Score | Matched builds | Why |",
@@ -130,6 +136,61 @@ function serializeFilterBladeHandoff(plan: PriorityPlan): string {
     "",
   ];
   return lines.join("\n");
+}
+
+function serializeFilterAudit(audit: FilterBladeAudit): string[] {
+  const maxTargets = 100;
+  let remainingRuleReferences = 80;
+  let omittedRuleReferences = 0;
+  const lines = [
+    "## Optional read-only audit of your current filter",
+    "",
+    `- Local file: ${markdownText(audit.sourceFile)}`,
+    `- Active rules scanned: ${audit.activeRuleCount}`,
+    `- Import directives counted but not opened: ${audit.importCount}`,
+    "",
+    "The entries below are candidate literal BaseType references. They do not evaluate the full rule stack or imported files and are not proof that an item will show or hide.",
+    "",
+  ];
+
+  for (const target of audit.targets.slice(0, maxTargets)) {
+    const baseType = target.baseType ? ` (${markdownText(target.baseType)})` : "";
+    const status = target.status === "base_unknown"
+      ? "base type unknown"
+      : target.status === "no_reference"
+        ? "no literal BaseType candidate found in the scanned file"
+        : "candidate references found; inspect the full rules";
+    lines.push(`- **${markdownText(target.item)}${baseType}** — ${status}`);
+
+    const shownRules = target.rules.slice(0, remainingRuleReferences);
+    remainingRuleReferences -= shownRules.length;
+    omittedRuleReferences += target.rules.length - shownRules.length;
+    for (const rule of shownRules) {
+      const ruleId = rule.filterBladeRuleId ? ` · FilterBlade ID \`${markdownText(rule.filterBladeRuleId)}\`` : "";
+      lines.push(`  - Rule ${rule.order}, line ${rule.line}: ${rule.effect}${ruleId}${rule.continues ? " · Continue" : ""}`);
+      const candidateClauses = rule.baseTypeClauses.filter((clause) => clause.mentionsTarget).slice(0, 6);
+      if (candidateClauses.length) {
+        lines.push(`    - BaseType candidates: ${candidateClauses.map((clause) => `\`${markdownText(clause.text)}\``).join("; ")}`);
+      }
+      const conditions = rule.otherRuleLines.slice(0, 6);
+      if (conditions.length) {
+        lines.push(`    - Other conditions: ${conditions.map((condition) => `\`${markdownText(condition)}\``).join("; ")}`);
+      }
+      const presentation = rule.presentation.slice(0, 8);
+      if (presentation.length) {
+        lines.push(`    - Existing presentation: ${presentation.map((directive) => `\`${markdownText(directive)}\``).join("; ")}`);
+      }
+    }
+  }
+
+  const omittedTargets = Math.max(0, audit.targets.length - maxTargets);
+  if (omittedTargets) lines.push(`- ${omittedTargets} additional targets were omitted to keep this guide compact.`);
+  if (omittedRuleReferences) lines.push(`- ${omittedRuleReferences} additional candidate rule references were omitted to keep this guide compact.`);
+  if (audit.limitations.length) {
+    lines.push("", "Audit limits:", ...audit.limitations.map((limitation) => `- ${markdownText(limitation)}`));
+  }
+  lines.push("");
+  return lines;
 }
 
 function humanize(value: string): string {

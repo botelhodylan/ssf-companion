@@ -629,7 +629,8 @@ export default function App() {
         relevance: row.relevance,
       })),
     });
-    const content = serializePriorityPlan(plan, format);
+    const currentFilterAudit = filterAudit?.planKey === filterAuditPlanKey ? filterAudit.audit : undefined;
+    const content = serializePriorityPlan(plan, format, currentFilterAudit);
     const isHandoff = format === "markdown";
     const name = isHandoff ? "ssf-filterblade-handoff" : "ssf-priority-plan";
     if (window.ssfDesktop) {
@@ -1318,9 +1319,9 @@ export default function App() {
 
       {filterAuditModalOpen && filterAudit?.planKey === filterAuditPlanKey && (
         <Modal title="FilterBlade rule audit" width="wide" onClose={() => setFilterAuditModalOpen(false)} footer={
-          <button className="button button-primary" type="button" onClick={() => setFilterAuditModalOpen(false)}>Done</button>
+          <><button className="button button-quiet" type="button" onClick={() => setFilterAuditModalOpen(false)}>Done</button><button className="button button-primary" type="button" onClick={() => { setFilterAuditModalOpen(false); exportContent("markdown"); }}>Export handoff with audit</button></>
         }>
-          <div className="modal-callout filter-audit-callout"><CircleHelp size={18} /><p>This is a read-only local audit. It does not modify or upload your filter. Matches are candidate BaseType mentions: the audit lists other rule lines but does not evaluate them, and it does not open files named by Import rules.</p></div>
+          <div className="modal-callout filter-audit-callout"><CircleHelp size={18} /><p>This is a read-only local audit. It does not modify or upload your filter. Matches are candidate BaseType mentions: the audit lists other rule lines but does not evaluate them, and it does not open files named by Import rules. The combined handoff can include these candidate rule IDs and existing style directives for review in FilterBlade.</p></div>
           <div className="filter-audit-summary">
             <div><span>FILE</span><strong>{filterAudit.audit.sourceFile}</strong></div>
             <div><span>ACTIVE RULES</span><strong>{filterAudit.audit.activeRuleCount.toLocaleString()}</strong></div>
