@@ -16,6 +16,7 @@
 
 - Preserve every named PoB passive spec, its tree version, and numeric node IDs.
 - Compare imported target specs against the ACTIVE PoB tree only when both tree versions match; show added/removed node IDs and withhold differences across missing or mismatched versions.
+- Optionally load a player-selected local GGG passive-tree JSON export to label differences when its player-confirmed version matches both specs. Store only relevant node names/stats locally; do not bundle the unlicensed export.
 - Present saved specs as author-provided alternatives. Their XML order is preserved but is not treated as a verified leveling sequence, and no respec cost or passive optimization is inferred.
 - Define an ordered typed route with stable step IDs, goal links, prerequisites, evidence, confidence, and a game-data version.
 - Generate only steps supported by imported state or curated versioned data; show “needs data” for everything else.
@@ -38,6 +39,7 @@
 
 - Define an auditable source format for items, bases, gems, recipes, vendors, quests, drop sources, divination cards, bosses, league mechanics, Atlas nodes, and skill-tree nodes.
 - Pin each pack to a PoE patch/content version, preserve upstream sources/licenses and reviewed timestamps, and make stale data visible.
+- Treat GGG's public skill-tree export as player-supplied local data unless GGG provides redistribution terms; the export itself does not declare its patch version.
 - Build automated pack validation for unknown IDs, missing prerequisites, invalid recipe cycles, dangling evidence references, and tree/version mismatch.
 - Ship reviewed data incrementally. Never publish unsupported farm/drop claims as complete routes.
 
@@ -53,6 +55,7 @@
 ## Phase 6 — FilterBlade/NeverSink handoff
 
 - **V1 delivered:** Export a manual Markdown review guide and semantic JSON/CSV priorities with target bases, roles, scores, and explanations. The guide is explicit that it is not a FilterBlade-importable module, gives FilterBlade's own module reuse path, and says lower priority is not a hide instruction.
+- **Research gate:** FilterBlade's public `.options` DSL configures its customizer UI; no public per-player priority import API is verified. The game filter grammar supports `Import` and `Continue`, but style-preserving overlay behavior is not verified, so the app still does not write `.filter` files.
 - Prototype a semantic adapter against versioned base filters and sample custom styles/sounds.
 - Preserve the chosen style, colors, sounds, strictness, and existing rule IDs; add only transparent semantic priority overlays.
 - Provide a diff, validation status, backup copy, and user-selected new output file. Never overwrite the source filter.
@@ -72,4 +75,4 @@ With a current character, league stash/Atlas snapshot, and imported target PoB, 
 
 ## Current verification record
 
-On 2026-10-05, the latest source passed 27 core tests, a `http-cache-semantics` max-stale security regression check, and the TypeScript/Vite production build. The Windows GitHub Actions CI run also passed. Same-version PoB passive specs now produce exact added/removed node-ID comparisons against the ACTIVE build; missing or mismatched versions produce no inferred delta. Account import remains blocked by GGG OAuth registration availability; verified craft recipes, target farms/Atlas trees, named passive-node routes, and direct customized-filter generation still require reviewed game data and further integration work.
+On 2026-10-05, the latest source passed 31 unit tests, the `http-cache-semantics` max-stale security regression check, and the TypeScript/Vite production build. A Windows portable preview package was produced; its first package launch showed a responsive app window. The final local package remains unsigned and has not been published. The desktop automation surface was unavailable in this session, so the optional tree import flow was not clicked through manually. Same-version PoB passive specs produce exact added/removed node-ID comparisons; a player-selected local tree export can add names and stats only when the confirmed version matches both specs. Mismatched versions still produce no inferred delta. Account import remains blocked by GGG OAuth registration availability; verified craft recipes, target farms/Atlas trees, ordered passive routes, and direct customized-filter generation still require reviewed game data and further integration work.

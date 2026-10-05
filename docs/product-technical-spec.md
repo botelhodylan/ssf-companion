@@ -136,6 +136,7 @@ The route planner is a deterministic core package between imported snapshots, ve
 
 - `CharacterSnapshot`: current level/stage, equipped items, current passives, and progression flags; source and timestamp are retained.
 - `BuildManifest[]`: ACTIVE target plus optional NEXT and INTERESTED builds. Preserve imported PoB specs as facts, including each spec's name, tree version, and allocated node IDs.
+- Optional player-selected local tree export: resolve node labels only after the player selects the exact PoB tree version. Never compare IDs or labels across versions.
 - `LeagueSnapshot`: stash inventory, saved Atlas passive trees, and explicitly selected farming goals when available.
 - `RouteContext`: game version, league/content version, current progression stage, and player constraints (for example, SSF league type).
 
@@ -146,6 +147,8 @@ Each snapshot can be absent. The planner must still work from a PoB alone, but m
 Every step has a stable id, stage, type (`checkpoint`, `gear`, `craft`, `farm`, `character_tree`, `atlas_tree`, or `filter`), target, ordered actions/prerequisites, completion evidence, and references to the exact build goals and data records used. It carries a rule/data-pack version and confidence (`verified`, `partial`, `unknown`). Use dependency links to produce a sensible order; sort ties deterministically. User completion and “not relevant” feedback are local profile data and never rewrite the game-data rules.
 
 Acquisition data separates *where an item comes from* from *what to allocate on the Atlas tree*. Crafting data is an explicit recipe graph with inputs, unlocks, operations, expected risks, and outcomes. Tree data is versioned by PoE patch and stored as source node IDs/hashes plus human-readable names. If the current game version does not match a route/tree record, mark it stale and suppress prescriptive output until reviewed.
+
+Imported PoB trees retain their source version and node IDs. Players can optionally select a local GGG passive-tree JSON export to resolve node names and stats for exact same-version allocation differences. The export does not declare its PoE patch version, so the player must confirm the version from the imported PoB spec; the app stores only facts for node IDs in their local builds. The GGG export repository currently has no explicit license, so SSF Companion does not bundle or redistribute its tree data. Names are annotations on a set difference, not an ordered leveling route.
 
 ### Release gates
 
@@ -163,6 +166,8 @@ SSF Companion exports semantic priorities and keeps the user's selected FilterBl
 ### Verified integration surface
 
 FilterBlade's [public option-file documentation](https://github.com/NeverSinkDev/FilterBlade-Public-Assets/blob/main/README_OptionFile.md) describes `.options` files as a domain language for defining its overview/customizer interface. It says rule name IDs connect those options to the save/load system and warns that changing an ID can invalidate existing customizations. That is a maintainer-oriented format, not a documented public runtime API for editing an individual player's saved customizer state. FilterBlade's [PoE 1 customizer](https://www.filterblade.xyz/?game=Poe1) presents My Modules as reusable changes managed inside the customizer; an external per-player priority import API has not been verified. GGG separately documents account item-filter endpoints under `account:item_filter`, including create/update and validation against the current game version. These can publish a game filter after OAuth approval but are not a FilterBlade save-state API.
+
+The official [PoE item-filter syntax](https://www.pathofexile.com/item-filter/about) includes `Import` and `Continue`, but those primitives alone do not establish how an added priority layer will preserve every existing FilterBlade style, sound, strictness, and rule interaction. SSF Companion therefore does not write or wrap `.filter` files until the adapter can be tested against versioned FilterBlade exports and exact game validation. The MIT-licensed [FilterBlade public assets](https://github.com/NeverSinkDev/FilterBlade-Public-Assets) include hover descriptions and item tags; they are not a per-player rule map or saved-filter API.
 
 ### Future integration gate
 
@@ -208,8 +213,10 @@ GGG permits independently running executable apps when they use a public OAuth c
 - [GGG API reference: account characters, league-scoped stash, and item filters](https://www.pathofexile.com/developer/docs/reference)
 - [Path of Building's current build-site endpoints](https://github.com/PathOfBuildingCommunity/PathOfBuilding/blob/dev/src/Modules/BuildSiteTools.lua)
 - [Path of Building's passive-tree version and allocation handling](https://github.com/PathOfBuildingCommunity/PathOfBuilding/blob/dev/src/Classes/TreeTab.lua)
+- [GGG's public PoE 1 passive-tree export](https://github.com/grindinggear/skilltree-export) (not bundled because no redistribution license is published)
 - [Pobb.in public integration guidance](https://github.com/Dav1dde/pasteofexile/blob/master/README.md)
 - [FilterBlade customizer option-file reference](https://github.com/NeverSinkDev/FilterBlade-Public-Assets/blob/main/README_OptionFile.md)
+- [PoE item-filter syntax](https://www.pathofexile.com/item-filter/about)
 - [FilterBlade upload, modules, style, and export guidance](https://www.filterblade.xyz/)
 - [Electron security checklist](https://www.electronjs.org/docs/latest/tutorial/security)
 - [electron-builder Windows targets](https://www.electron.build/docs/win/)

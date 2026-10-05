@@ -226,6 +226,51 @@ describe("buildProgressionRoute", () => {
     expect(missingCurrent?.action).toContain("no current-tree gap is claimed");
   });
 
+  it("adds node names only when the imported tree data matches both spec versions", () => {
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      id: "active-named-tree",
+      role: "ACTIVE",
+      passiveSpecs: [{ id: 1, name: "Current", treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2] }],
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      id: "next-named-tree",
+      role: "NEXT",
+      passiveSpecs: [{ id: 2, name: "Target", treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2, 3] }],
+    };
+    const data = {
+      treeVersion: "3_26",
+      sourceFile: "data.json",
+      importedAt: "2026-10-05T00:00:00.000Z",
+      nodes: {
+        "3": { id: 3, name: "Heart of Flame", kind: "notable" as const, stats: ["10% increased Fire Damage"] },
+      },
+    };
+    const matched = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION, passiveTreeData: data })
+      .steps.find((step) => step.kind === "passive_tree");
+    const wrongVersion = buildProgressionRoute({
+      build: targetBuild,
+      currentBuild,
+      progression: PROGRESSION,
+      passiveTreeData: { ...data, treeVersion: "3_27" },
+    }).steps.find((step) => step.kind === "passive_tree");
+
+    expect(matched?.passiveTree).toMatchObject({
+      addedNodeIds: [3],
+      addedNodes: [{ id: 3, name: "Heart of Flame", kind: "notable" }],
+    });
+    expect(matched?.action).toContain("Heart of Flame");
+    expect(matched?.action).toContain("not an ordered leveling path");
+    expect(matched?.evidence).toContainEqual(expect.objectContaining({
+      source: "local_tree_export",
+      version: "3_26",
+      reference: "data.json",
+    }));
+    expect(wrongVersion?.passiveTree).not.toHaveProperty("addedNodes");
+    expect(wrongVersion?.evidence).not.toContainEqual(expect.objectContaining({ source: "local_tree_export" }));
+  });
+
   it("marks recipes, atlas routes, passive nodes, and filter rules as needing curated data", () => {
     const route = buildProgressionRoute({ build: BUILD, progression: PROGRESSION, stash: STASH });
     const crafting = route.steps.find((step) => step.kind === "crafting_plan");

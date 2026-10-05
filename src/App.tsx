@@ -19,6 +19,7 @@ import {
 import type { BuildManifest, BuildRole, ItemGoal, ProgressionStage } from "./core/types";
 import { normalizeBuildInput } from "./core/build-import";
 import { buildProgressionRoute, type ProgressionRouteStep } from "./core/progression-route";
+import { parsePassiveTreeExport, type PassiveTreeDataset } from "./core/passive-tree-data";
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
 import { rankItemsByRelevance } from "./core/relevance";
 import { AccountSyncStrip } from "./components/AccountSyncStrip";
@@ -55,6 +56,7 @@ const STORAGE = {
   characterId: "ssf-companion:selected-character:v1",
   contact: "ssf-companion:pobb-contact:v2",
   legacyContact: "ssf-companion:pobb-contact:v1",
+  passiveTreeData: "ssf-companion:passive-tree-data:v1",
 };
 
 const ROLE_LABELS: readonly BuildRole[] = ["ACTIVE", "NEXT", "INTERESTED"];
@@ -149,6 +151,7 @@ export default function App() {
     STORAGE.contact,
     readStorage<string>(STORAGE.legacyContact, "").trim() || GITHUB_ISSUES_URL,
   );
+  const [passiveTreeData, setPassiveTreeData] = useStoredValue<PassiveTreeDataset | null>(STORAGE.passiveTreeData, null);
   const [sessionBuilds, setSessionBuilds] = useState<BuildManifest[]>([]);
   const [roleTab, setRoleTab] = useState<BuildRole>("ACTIVE");
   const [selectedBuildId, setSelectedBuildId] = useState("");
@@ -156,6 +159,7 @@ export default function App() {
   const [progressionOverride, setProgressionOverride] = useState<ProgressionStage>("atlas");
   const [progressionStageConfirmed, setProgressionStageConfirmed] = useState(false);
   const [selectedRouteStepId, setSelectedRouteStepId] = useState("");
+  const [passiveTreeVersionSelection, setPassiveTreeVersionSelection] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
   const [importInput, setImportInput] = useState("");
   const [importing, setImporting] = useState(false);
@@ -169,6 +173,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [appVersion, setAppVersion] = useState("Source preview");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const passiveTreeFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void window.ssfDesktop?.getAppVersion().then(setAppVersion).catch(() => undefined);
@@ -199,6 +204,12 @@ export default function App() {
   ];
   const sampleMode = !selectedCharacter && sessionBuilds.length === 0 && savedBuilds.length === 0;
   const visibleBuilds = sampleMode ? [...SAMPLE_BUILD_SET] : sessionAndSavedBuilds;
+  const passiveTreeVersionOptions = [...new Set(visibleBuilds.flatMap((build) =>
+    (build.passiveSpecs ?? []).flatMap((spec) => spec.treeVersion?.trim() ? [spec.treeVersion.trim()] : []),
+  ))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+  const passiveTreeImportVersion = passiveTreeVersionOptions.includes(passiveTreeVersionSelection)
+    ? passiveTreeVersionSelection
+    : passiveTreeVersionOptions[0] ?? "";
   const roleBuilds = visibleBuilds.filter((build) => build.role === roleTab);
   const selectedBuild = roleBuilds.find((build) => build.id === selectedBuildId) ?? roleBuilds[0];
   const currentStage = selectedCharacter?.progressionStage ?? progressionOverride;
@@ -217,6 +228,7 @@ export default function App() {
     return buildProgressionRoute({
       build: selectedBuild,
       currentBuild: visibleBuilds.find((build) => build.role === "ACTIVE"),
+      passiveTreeData,
       progression: {
         stage,
         source,
@@ -224,7 +236,7 @@ export default function App() {
         ...(selectedCharacter?.level ? { characterLevel: selectedCharacter.level } : {}),
       },
     });
-  }, [selectedBuild, visibleBuilds, selectedCharacter, progressionStageConfirmed, sampleMode, routeStage]);
+  }, [selectedBuild, visibleBuilds, selectedCharacter, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData]);
   const selectedRouteStep = progressionRoute?.steps.find((step) => step.id === selectedRouteStepId)
     ?? progressionRoute?.steps[0];
 
@@ -436,6 +448,58 @@ export default function App() {
       return;
     }
     await importBuild(await file.text());
+    event.target.value = "";
+  }
+
+  function importPassiveTreeFile(file: { name: string; content: string }) {
+    if (!passiveTreeImportVersion) {
+      notify("Import a PoB build with a passive-tree version before loading tree data.");
+      return;
+    }
+    const relevantNodeIds = [...new Set(visibleBuilds.flatMap((build) =>
+      (build.passiveSpecs ?? [])
+        .filter((spec) => spec.treeVersion?.trim() === passiveTreeImportVersion)
+        .flatMap((spec) => spec.allocatedNodeIds),
+    ))];
+    if (!relevantNodeIds.length) {
+      notify(`No saved build contains node IDs for tree ${passiveTreeImportVersion}.`);
+      return;
+    }
+    try {
+      const imported = parsePassiveTreeExport(file.content, passiveTreeImportVersion, file.name, relevantNodeIds);
+      setPassiveTreeData(imported);
+      notify(`Loaded ${Object.keys(imported.nodes).length} passive-node names for tree ${imported.treeVersion}.`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The passive-tree export could not be imported.");
+    }
+  }
+
+  async function openPassiveTreeDataFile() {
+    if (!passiveTreeImportVersion) {
+      notify("Import a PoB build with a passive-tree version before loading tree data.");
+      return;
+    }
+    if (window.ssfDesktop) {
+      try {
+        const file = await window.ssfDesktop.openPassiveTreeDataFile();
+        if (file) importPassiveTreeFile(file);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "The passive-tree file could not be opened.");
+      }
+      return;
+    }
+    passiveTreeFileInputRef.current?.click();
+  }
+
+  async function browserPassiveTreeFileChosen(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 12_000_000) {
+      notify("That passive-tree export is too large to import safely.");
+      event.target.value = "";
+      return;
+    }
+    importPassiveTreeFile({ name: file.name, content: await file.text() });
     event.target.value = "";
   }
 
@@ -840,6 +904,32 @@ export default function App() {
               <p className="route-context-note">{snapshotNote}</p>
             </section>
 
+            <section className="route-tree-data" aria-label="Passive tree name data">
+              <div className="route-tree-data-copy">
+                <span className="section-kicker">OPTIONAL LOCAL DATA</span>
+                <strong>Resolve passive-node names</strong>
+                <p>Load a GGG passive-tree JSON export to label exact PoB node differences. The export does not include its patch version, so confirm the version shown in your PoB spec.</p>
+                <button className="text-link" type="button" onClick={() => void openTrustedLink("https://github.com/grindinggear/skilltree-export")}>Open GGG tree exports <ExternalLink size={13} /></button>
+              </div>
+              <div className="route-tree-data-controls">
+                <label htmlFor="tree-data-version">PoB tree version</label>
+                <select id="tree-data-version" value={passiveTreeImportVersion} onChange={(event) => setPassiveTreeVersionSelection(event.target.value)} disabled={!passiveTreeVersionOptions.length}>
+                  {passiveTreeVersionOptions.length
+                    ? passiveTreeVersionOptions.map((version) => <option value={version} key={version}>{version}</option>)
+                    : <option value="">Import a PoB tree first</option>}
+                </select>
+                <button className="button button-outline" type="button" onClick={() => void openPassiveTreeDataFile()} disabled={!passiveTreeImportVersion}>Import tree JSON</button>
+                {passiveTreeData && (
+                  <div className="route-tree-data-status" role="status">
+                    <span>{Object.keys(passiveTreeData.nodes).length} node labels loaded · tree {passiveTreeData.treeVersion} · {passiveTreeData.sourceFile}</span>
+                    <button className="text-link" type="button" onClick={() => setPassiveTreeData(null)}>Clear</button>
+                  </div>
+                )}
+              </div>
+              <input ref={passiveTreeFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserPassiveTreeFileChosen(event)} />
+              <p className="route-tree-data-note">The app stores only the selected node names for your imported builds on this device. It does not include GGG tree data in the installer.</p>
+            </section>
+
             <div className="route-layout">
               <section className="route-step-list" aria-label="Ordered progression steps">
                 <div className="route-section-heading">
@@ -882,8 +972,31 @@ export default function App() {
                           {selectedRouteStep.passiveTree.comparison === "compared" && (
                             <details className="passive-node-id-list">
                               <summary>View exact allocation differences</summary>
-                              <p>Added node IDs: {selectedRouteStep.passiveTree.addedNodeIds?.join(", ") || "None"}</p>
-                              <p>ACTIVE node IDs absent from target: {selectedRouteStep.passiveTree.removedNodeIds?.join(", ") || "None"}</p>
+                              <div className="passive-node-group">
+                                <strong>Added in target</strong>
+                                <p>{selectedRouteStep.passiveTree.addedNodeIds?.join(", ") || "None"}</p>
+                                {selectedRouteStep.passiveTree.addedNodes?.length ? (
+                                  <ul>{selectedRouteStep.passiveTree.addedNodes.map((node) => (
+                                    <li key={node.id}>
+                                      <span><b>{node.name ?? node.stats[0] ?? `Node ${node.id}`}</b><small>#{node.id}{node.kind ? ` · ${node.kind}` : ""}</small></span>
+                                      {node.name && node.stats.length > 0 && <small>{node.stats.join(" · ")}</small>}
+                                    </li>
+                                  ))}</ul>
+                                ) : null}
+                              </div>
+                              <div className="passive-node-group">
+                                <strong>ACTIVE nodes absent from target</strong>
+                                <p>{selectedRouteStep.passiveTree.removedNodeIds?.join(", ") || "None"}</p>
+                                {selectedRouteStep.passiveTree.removedNodes?.length ? (
+                                  <ul>{selectedRouteStep.passiveTree.removedNodes.map((node) => (
+                                    <li key={node.id}>
+                                      <span><b>{node.name ?? node.stats[0] ?? `Node ${node.id}`}</b><small>#{node.id}{node.kind ? ` · ${node.kind}` : ""}</small></span>
+                                      {node.name && node.stats.length > 0 && <small>{node.stats.join(" · ")}</small>}
+                                    </li>
+                                  ))}</ul>
+                                ) : null}
+                              </div>
+                              {selectedRouteStep.passiveTree.addedNodes?.length ? <p className="passive-node-caveat">Names come from local tree {selectedRouteStep.passiveTree.treeVersion} data. This set difference does not provide a leveling order or refund cost.</p> : null}
                             </details>
                           )}
                         </div>

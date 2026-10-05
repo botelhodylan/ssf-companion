@@ -608,6 +608,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .route-context-stat > span, .route-step-meta, .route-data-gap > span { color: #828a84; font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .route-context-stat strong { color: #dbb580; font: 700 23px/1 var(--display); }
 .route-context-note { grid-column: 1 / -1; margin: 0; padding-top: 11px; border-top: 1px solid #303838; color: #a0a49c; font-size: 11px; line-height: 1.5; }
+.route-tree-data { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .75fr); gap: 12px 22px; max-width: 1120px; margin-top: 12px; padding: 14px 16px; border: 1px solid #384040; border-radius: 5px; background: #171d1e; }
+.route-tree-data-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.route-tree-data-copy > strong { color: #e8dece; font: 700 15px/1.2 var(--display); }
+.route-tree-data-copy > p { max-width: 650px; margin: 0; color: #9da39c; font-size: 10px; line-height: 1.5; }
+.route-tree-data-copy > .text-link { padding: 0; font-size: 10px; }
+.route-tree-data-controls { display: grid; grid-template-columns: minmax(95px, .65fr) minmax(115px, 1fr); align-content: center; gap: 7px 9px; }
+.route-tree-data-controls > label { grid-column: 1 / -1; color: #d4c9b9; font-size: 10px; font-weight: 600; }
+.route-tree-data-controls > select { min-width: 0; height: 36px; padding: 0 9px; border: 1px solid #434b4a; border-radius: 4px; color: #eee4d4; background: #14191a; font-size: 11px; }
+.route-tree-data-controls > .button { min-height: 36px; padding: 0 10px; font-size: 10px; }
+.route-tree-data-status { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #a6b89a; font-size: 9px; }
+.route-tree-data-status > span { overflow-wrap: anywhere; }
+.route-tree-data-status > .text-link { flex: 0 0 auto; padding: 0; font-size: 9px; }
+.route-tree-data-note { grid-column: 1 / -1; margin: 0; color: #727b76; font-size: 9px; line-height: 1.4; }
 .route-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(295px, .78fr); align-items: start; gap: 23px; max-width: 1120px; margin-top: 22px; }
 .route-step-list { min-width: 0; }
 .route-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; margin-bottom: 10px; padding-bottom: 11px; border-bottom: 1px solid #353d3c; }
@@ -643,6 +656,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .passive-node-id-list { margin-top: 8px; color: #a7aaa2; font-size: 9px; line-height: 1.5; }
 .passive-node-id-list summary { color: #c7a16f; cursor: pointer; }
 .passive-node-id-list p { overflow-wrap: anywhere; }
+.passive-node-group { margin-top: 9px; }
+.passive-node-group > strong { color: #d5cdbf; font-size: 9px; }
+.passive-node-group > p { margin: 4px 0; overflow-wrap: anywhere; color: #87908a; }
+.passive-node-group > ul { display: flex; flex-direction: column; gap: 7px; max-height: 220px; overflow: auto; margin: 5px 0 0; padding: 0 8px 0 0; list-style: none; }
+.passive-node-group li { display: flex; flex-direction: column; gap: 2px; padding: 6px 7px; border-left: 1px solid #554832; background: #1e2424; }
+.passive-node-group li > span { display: flex; justify-content: space-between; gap: 10px; color: #d9d2c6; }
+.passive-node-group li b { font-size: 9px; font-weight: 600; }
+.passive-node-group li small { color: #888f88; font-size: 8px; line-height: 1.4; }
+.passive-node-caveat { margin-top: 8px; color: #777f79; font-size: 8px; }
 .route-data-gap { padding: 9px 10px; border: 1px solid #383f3d; border-radius: 3px; background: #1e2424; }
 .route-data-gap > span { font-size: 8px; }
 .route-version-detail { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 5px 8px; margin-top: 18px; padding-top: 11px; border-top: 1px solid #303838; }
@@ -665,6 +687,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .route-title-row { align-items: flex-start; flex-direction: column; }
   .route-context-card { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .route-context-stage { grid-column: span 2; }
+  .route-tree-data { grid-template-columns: minmax(0, 1fr); }
+  .route-tree-data-controls { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   .route-step-card { grid-template-columns: 32px minmax(0,1fr) 13px; }
   .route-step-card > .route-status { grid-column: 2; justify-self: start; }
   .route-step-chevron { grid-column: 3; grid-row: 1; }

@@ -1,4 +1,5 @@
 import { poe1Provider } from "./game-provider";
+import type { PassiveNodeFact, PassiveTreeDataset } from "./passive-tree-data";
 import type { BuildManifest, BuildRole, ItemGoal, ProgressionStage } from "./types";
 
 export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.1.0" as const;
@@ -7,7 +8,8 @@ export type RouteEvidenceSource =
   | "route_rules"
   | "build_manifest"
   | "progression_snapshot"
-  | "stash_snapshot";
+  | "stash_snapshot"
+  | "local_tree_export";
 
 export type RouteConfidence = "high" | "medium" | "low";
 
@@ -36,6 +38,8 @@ export interface PassiveTreeComparison {
   readonly baselineTreeVersion?: string;
   readonly addedNodeIds?: readonly number[];
   readonly removedNodeIds?: readonly number[];
+  readonly addedNodes?: readonly PassiveNodeFact[];
+  readonly removedNodes?: readonly PassiveNodeFact[];
 }
 
 export interface RouteEvidence {
@@ -77,7 +81,7 @@ export interface ProgressionRouteStep {
   readonly target?: string;
   readonly targetQuantity?: number;
   readonly ownedQuantity?: number;
-  /** Exact facts preserved from an imported PoB tree; no node names are inferred. */
+  /** Exact node IDs and optional names resolved from a matching local tree export. */
   readonly passiveTree?: PassiveTreeComparison;
 }
 
@@ -112,6 +116,7 @@ export interface ProgressionRouteInput {
   readonly currentBuild?: BuildManifest;
   readonly progression: RouteProgressionSnapshot;
   readonly stash?: RouteStashSnapshot | null;
+  readonly passiveTreeData?: PassiveTreeDataset | null;
 }
 
 export interface ProgressionRoute {
@@ -148,7 +153,7 @@ function stageLabel(stage: ProgressionStage | "unknown"): string {
  * filter item classes. Those steps carry explicit curated-data requirements.
  */
 export function buildProgressionRoute(input: ProgressionRouteInput): ProgressionRoute {
-  const { build, currentBuild, progression, stash } = input;
+  const { build, currentBuild, progression, stash, passiveTreeData } = input;
   const dataVersion: ProgressionRouteDataVersion = {
     routeRules: POE1_ROUTE_RULES_VERSION,
     buildManifestSchema: build.schemaVersion,
@@ -346,6 +351,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     progressionEvidence,
     buildEvidence,
     reliableBuildConfidence,
+    passiveTreeData,
   });
 
   const filterSteps = build.itemGoals.length
@@ -431,6 +437,7 @@ function buildPassiveTreeSteps(input: {
   readonly progressionEvidence: RouteEvidence;
   readonly buildEvidence: (detail: string, goal?: ItemGoal) => RouteEvidence;
   readonly reliableBuildConfidence: RouteConfidence;
+  readonly passiveTreeData?: PassiveTreeDataset | null;
 }): Omit<ProgressionRouteStep, "order">[] {
   const {
     build,
@@ -441,6 +448,7 @@ function buildPassiveTreeSteps(input: {
     progressionEvidence,
     buildEvidence,
     reliableBuildConfidence,
+    passiveTreeData,
   } = input;
   const currentBuild = suppliedCurrentBuild?.role === "ACTIVE"
     ? suppliedCurrentBuild
@@ -495,6 +503,17 @@ function buildPassiveTreeSteps(input: {
     const removedNodeIds = comparison === "compared"
       ? currentNodeIds.filter((nodeId) => !targetNodeSet.has(nodeId))
       : undefined;
+    const hasNodeDifference = Boolean(addedNodeIds?.length || removedNodeIds?.length);
+    const canResolveNodeNames = comparison === "compared"
+      && hasNodeDifference
+      && Boolean(targetVersion)
+      && passiveTreeData?.treeVersion === targetVersion;
+    const factsFor = (nodeIds: readonly number[] | undefined): PassiveNodeFact[] | undefined => {
+      if (!canResolveNodeNames || !nodeIds || !passiveTreeData) return undefined;
+      return nodeIds.map((nodeId) => passiveTreeData.nodes[String(nodeId)] ?? { id: nodeId, stats: [] });
+    };
+    const addedNodes = factsFor(addedNodeIds);
+    const removedNodes = factsFor(removedNodeIds);
     const requiredData: RouteDataRequirement[] = [];
 
     if (comparison === "missing_current") {
@@ -523,12 +542,25 @@ function buildPassiveTreeSteps(input: {
       } : {}),
       ...(addedNodeIds ? { addedNodeIds } : {}),
       ...(removedNodeIds ? { removedNodeIds } : {}),
+      ...(addedNodes ? { addedNodes } : {}),
+      ...(removedNodes ? { removedNodes } : {}),
     } satisfies NonNullable<ProgressionRouteStep["passiveTree"]>;
     const aligned = comparison === "compared" && addedNodeIds?.length === 0 && removedNodeIds?.length === 0;
+    const namedAdded = addedNodes?.filter((node) => node.name || node.stats.length > 0) ?? [];
+    const namedRemoved = removedNodes?.filter((node) => node.name || node.stats.length > 0) ?? [];
+    const addedSummary = addedNodeIds?.length
+      ? `additions such as ${namedAdded.slice(0, 3).map(passiveNodeLabel).join(", ") || "unmapped nodes"}`
+      : "no target additions";
+    const removedSummary = removedNodeIds?.length
+      ? `omitted ACTIVE nodes such as ${namedRemoved.slice(0, 3).map(passiveNodeLabel).join(", ") || "unmapped nodes"}`
+      : "no ACTIVE nodes omitted";
+    const nodeSummary = canResolveNodeNames
+      ? ` Matching local tree data identifies ${addedSummary} and ${removedSummary}. This is an allocation set difference, not an ordered leveling path.`
+      : "";
     const action = comparison === "compared"
       ? aligned
         ? `This target PoB spec exactly matches the ACTIVE spec “${passiveTree.baselineSpecName}” by node ID in tree ${targetVersion}. The route preserves the saved spec; it does not independently rank or optimize passives.`
-        : `Load the target spec in Path of Building and review its allocation difference from ACTIVE “${passiveTree.baselineSpecName}” in tree ${targetVersion}: add ${addedNodeIds?.length ?? 0} node IDs and review ${removedNodeIds?.length ?? 0} ACTIVE nodes omitted by the target. The route does not estimate respec cost or optimize nodes.`
+        : `Load the target spec in Path of Building and review its allocation difference from ACTIVE “${passiveTree.baselineSpecName}” in tree ${targetVersion}: add ${addedNodeIds?.length ?? 0} node IDs and review ${removedNodeIds?.length ?? 0} ACTIVE nodes omitted by the target.${nodeSummary} The route does not estimate respec cost or optimize nodes.`
       : comparison === "missing_current"
         ? `Load this saved PoB spec in Path of Building: ${targetName} (${targetVersion ?? "tree version not recorded"}, ${targetNodeIds.length} allocated node IDs). The target tree is preserved, but no current-tree gap is claimed without an ACTIVE node snapshot.`
         : `Load this saved PoB spec in Path of Building: ${targetName} (${targetVersion ?? "tree version not recorded"}, ${targetNodeIds.length} allocated node IDs). The target is exact source data, but its node IDs are not compared because the ACTIVE and target tree versions are missing or differ.`;
@@ -538,6 +570,14 @@ function buildPassiveTreeSteps(input: {
           version: `build-manifest-schema-${currentBuild.schemaVersion}`,
           reference: currentBuild.id,
           detail: `ACTIVE baseline spec ${passiveTree.baselineSpecName ?? "unknown"} uses tree ${currentVersion ?? "unknown"} with ${currentNodeIds.length} node IDs.`,
+        }]
+      : [];
+    const treeDataEvidence: RouteEvidence[] = canResolveNodeNames && passiveTreeData
+      ? [{
+          source: "local_tree_export",
+          version: passiveTreeData.treeVersion,
+          reference: passiveTreeData.sourceFile,
+          detail: "Node names and stat descriptions were resolved from a player-selected local tree export. Its patch version was confirmed by the player because the export file does not declare it.",
         }]
       : [];
 
@@ -557,6 +597,7 @@ function buildPassiveTreeSteps(input: {
         routeEvidence,
         buildEvidence(`Target PoB spec ${targetName} uses tree ${targetVersion ?? "unknown"} with ${targetNodeIds.length} unique node IDs. It is preserved source data, not a newly generated passive path.`),
         ...currentBuildEvidence,
+        ...treeDataEvidence,
         progressionEvidence,
       ],
       requiredData,
@@ -564,6 +605,10 @@ function buildPassiveTreeSteps(input: {
       passiveTree,
     };
   });
+}
+
+function passiveNodeLabel(node: PassiveNodeFact): string {
+  return node.name ?? node.stats[0] ?? `node ${node.id}`;
 }
 
 function activePassiveSpec(build: BuildManifest | undefined) {
