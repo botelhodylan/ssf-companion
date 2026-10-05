@@ -1,0 +1,14 @@
+node_modules/
+dist/
+release/
+release-*/
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage/
+*.pfx
+*.p12
+*.snk
+*.cer
+*.pvk

@@ -1,0 +1,8 @@
+allowBuilds:
+  electron-winstaller: true
+nodeLinker: hoisted
+minimumReleaseAgeExclude:
+  - '@nodable/entities@3.1.0'
+  - electron@44.5.0
+  - lucide-react@1.49.0
+  - wait-on@9.5.1

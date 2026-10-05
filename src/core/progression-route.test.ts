@@ -1,0 +1,253 @@
+import { describe, expect, it } from "vitest";
+import type { BuildManifest } from "./types";
+import {
+  buildProgressionRoute,
+  POE1_ROUTE_RULES_VERSION,
+  type RouteProgressionSnapshot,
+  type RouteStashSnapshot,
+} from "./progression-route";
+
+const BUILD: BuildManifest = {
+  schemaVersion: 1,
+  game: "poe1",
+  id: "build-winter-orb",
+  name: "Winter Orb Elementalist",
+  className: "Witch",
+  ascendancy: "Elementalist",
+  level: 86,
+  role: "ACTIVE",
+  progressionStage: "atlas",
+  source: { kind: "manual", importState: "complete" },
+  confidence: "high",
+  passiveAllocationCount: 112,
+  itemGoals: [
+    {
+      id: "goal-ring",
+      kind: "equip",
+      priority: 5,
+      match: { itemNames: ["The Taming"] },
+      why: "Planned unique ring.",
+    },
+    {
+      id: "goal-helmet-base",
+      kind: "crafting",
+      priority: 4,
+      match: { baseTypes: ["Torturer's Mask"] },
+      why: "Hybrid evasion and energy shield helmet base.",
+    },
+    {
+      id: "goal-alteration",
+      kind: "crafting",
+      priority: 3,
+      match: { itemNames: ["Orb of Alteration"] },
+      why: "Crafting currency goal.",
+    },
+  ],
+};
+
+const PROGRESSION: RouteProgressionSnapshot = {
+  stage: "early_mapping",
+  version: "character-sync-12",
+  source: "official_character",
+  characterLevel: 78,
+  passiveAllocationCount: 94,
+};
+
+const STASH: RouteStashSnapshot = {
+  version: "league-stash-31",
+  source: "official_import",
+  items: [
+    { id: "base-1", name: "Torturer's Mask", baseType: "Torturer's Mask", quantity: 1 },
+    { id: "currency-1", name: "Orb of Alteration", quantity: 15 },
+  ],
+};
+
+describe("buildProgressionRoute", () => {
+  it("orders gear gaps, crafting, farming, passive tree, then loot-filter work", () => {
+    const route = buildProgressionRoute({ build: BUILD, progression: PROGRESSION, stash: STASH });
+    const kinds = route.steps.map((step) => step.kind);
+
+    expect(route).toMatchObject({
+      game: "poe1",
+      rulesVersion: POE1_ROUTE_RULES_VERSION,
+      currentStage: "early_mapping",
+      targetStage: "atlas",
+    });
+    expect(kinds.slice(0, 2)).toEqual(["gear_gap", "gear_gap"]);
+    expect(kinds.slice(2, 4)).toEqual(["crafting_plan", "crafting_plan"]);
+    expect(kinds[4]).toBe("farming_atlas");
+    expect(kinds[5]).toBe("passive_tree");
+    expect(kinds.slice(6).every((kind) => kind === "loot_filter_priority")).toBe(true);
+    expect(route.steps.map((step) => step.order)).toEqual(route.steps.map((_step, index) => index + 1));
+  });
+
+  it("uses exact stash facts for gaps and includes snapshot versions as evidence", () => {
+    const route = buildProgressionRoute({ build: BUILD, progression: PROGRESSION, stash: STASH });
+    const ring = route.steps.find((step) => step.goalId === "goal-ring" && step.kind === "gear_gap");
+    const helmet = route.steps.find((step) => step.goalId === "goal-helmet-base" && step.kind === "gear_gap");
+
+    expect(ring).toMatchObject({ status: "ready", target: "The Taming", targetQuantity: 1, ownedQuantity: 0 });
+    expect(helmet).toMatchObject({ status: "complete", target: "Torturer's Mask", ownedQuantity: 1 });
+    expect(ring?.dataVersion).toEqual({
+      routeRules: POE1_ROUTE_RULES_VERSION,
+      buildManifestSchema: 1,
+      progressionSnapshot: "character-sync-12",
+      stashSnapshot: "league-stash-31",
+      curatedData: "not-loaded",
+    });
+    expect(ring?.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: "build_manifest", reference: "build-winter-orb/goal-ring" }),
+      expect.objectContaining({ source: "progression_snapshot", version: "character-sync-12" }),
+      expect.objectContaining({ source: "stash_snapshot", version: "league-stash-31" }),
+    ]));
+    expect(ring?.confidence).toBe("high");
+  });
+
+  it("does not claim a gear gap when no stash snapshot was supplied", () => {
+    const route = buildProgressionRoute({ build: BUILD, progression: PROGRESSION });
+    const ring = route.steps.find((step) => step.goalId === "goal-ring" && step.kind === "gear_gap");
+
+    expect(ring).toMatchObject({ status: "needs_personal_data", confidence: "low" });
+    expect(ring?.ownedQuantity).toBeUndefined();
+    expect(ring?.requiredData).toContainEqual(expect.objectContaining({
+      category: "personal",
+      key: "league_stash_snapshot",
+    }));
+    expect(ring?.action).toContain("availability is unknown");
+  });
+
+  it("marks the current stage unknown until a local or official snapshot is supplied", () => {
+    const route = buildProgressionRoute({
+      build: BUILD,
+      progression: { stage: "unknown", version: "unset", source: "unknown" },
+    });
+    const farming = route.steps.find((step) => step.kind === "farming_atlas");
+
+    expect(route.currentStage).toBe("unknown");
+    expect(farming).toMatchObject({ status: "needs_personal_and_curated_data" });
+    expect(farming?.action).toContain("Current stage: Unknown stage");
+    expect(farming?.requiredData).toContainEqual(expect.objectContaining({ key: "current_progression_stage" }));
+  });
+
+  it("does not turn an abstract tag goal into a fabricated exact gear gap", () => {
+    const tagOnlyBuild: BuildManifest = {
+      ...BUILD,
+      itemGoals: [{
+        id: "goal-hybrid-defense-tag",
+        kind: "equip",
+        priority: 4,
+        match: { anyTags: ["hybrid-defense"] },
+      }],
+    };
+    const route = buildProgressionRoute({ build: tagOnlyBuild, progression: PROGRESSION, stash: STASH });
+    const gap = route.steps.find((step) => step.goalId === "goal-hybrid-defense-tag");
+
+    expect(gap).toMatchObject({ status: "needs_curated_data", confidence: "low" });
+    expect(gap?.ownedQuantity).toBeUndefined();
+    expect(gap?.requiredData).toContainEqual(expect.objectContaining({ key: "poe1_item_tag_taxonomy" }));
+    expect(gap?.action).toContain("does not prove an exact gear gap");
+  });
+
+  it("compares saved target PoB specs with the ACTIVE tree only when versions match", () => {
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      id: "active-winter-orb",
+      name: "Current Winter Orb",
+      role: "ACTIVE",
+      passiveSpecs: [{
+        id: 1,
+        name: "Current mapping",
+        treeVersion: "3_26",
+        isActive: true,
+        allocatedNodeIds: [1, 2, 4],
+      }],
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      id: "next-winter-orb",
+      name: "Next Winter Orb",
+      role: "NEXT",
+      passiveSpecs: [
+        { id: 1, name: "Early", treeVersion: "3_26", isActive: false, allocatedNodeIds: [1, 2, 3] },
+        { id: 2, name: "Mapping", treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2, 3, 4, 5] },
+      ],
+    };
+    const route = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION });
+    const passiveSteps = route.steps.filter((step) => step.kind === "passive_tree");
+
+    expect(passiveSteps).toHaveLength(2);
+    expect(passiveSteps[0]).toMatchObject({
+      status: "ready",
+      title: "PoB tree spec: Early",
+      passiveTree: {
+        specId: 1,
+        treeVersion: "3_26",
+        comparison: "compared",
+        baselineSpecName: "Current mapping",
+        addedNodeIds: [3],
+        removedNodeIds: [4],
+      },
+    });
+    expect(passiveSteps[1]?.passiveTree).toMatchObject({
+      specId: 2,
+      specName: "Mapping",
+      comparison: "compared",
+      addedNodeIds: [3, 5],
+      removedNodeIds: [],
+    });
+    expect(passiveSteps[0]?.action).toContain("does not estimate respec cost");
+  });
+
+  it("does not compare passive node IDs across different or missing tree versions", () => {
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      role: "ACTIVE",
+      passiveSpecs: [{ id: 1, name: "Current", treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2] }],
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      passiveSpecs: [{ id: 3, name: "Target", treeVersion: "3_27", isActive: true, allocatedNodeIds: [1, 2, 3] }],
+    };
+    const mismatch = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION })
+      .steps.find((step) => step.kind === "passive_tree");
+    const missingCurrent = buildProgressionRoute({ build: targetBuild, progression: PROGRESSION })
+      .steps.find((step) => step.kind === "passive_tree");
+
+    expect(mismatch).toMatchObject({
+      status: "needs_curated_data",
+      passiveTree: { comparison: "version_mismatch" },
+    });
+    expect(mismatch?.passiveTree).not.toHaveProperty("addedNodeIds");
+    expect(missingCurrent).toMatchObject({
+      status: "needs_personal_data",
+      passiveTree: { comparison: "missing_current" },
+    });
+    expect(missingCurrent?.action).toContain("no current-tree gap is claimed");
+  });
+
+  it("marks recipes, atlas routes, passive nodes, and filter rules as needing curated data", () => {
+    const route = buildProgressionRoute({ build: BUILD, progression: PROGRESSION, stash: STASH });
+    const crafting = route.steps.find((step) => step.kind === "crafting_plan");
+    const farming = route.steps.find((step) => step.kind === "farming_atlas");
+    const passive = route.steps.find((step) => step.kind === "passive_tree");
+    const filter = route.steps.find((step) => step.kind === "loot_filter_priority");
+
+    expect(crafting).toMatchObject({ status: "needs_curated_data", confidence: "low" });
+    expect(crafting?.requiredData).toContainEqual(expect.objectContaining({ key: "poe1_crafting_recipes_and_mod_pool" }));
+    expect(crafting?.action).toContain("Do not assume an affix recipe");
+    expect(farming).toMatchObject({ status: "needs_curated_data", confidence: "low" });
+    expect(farming?.requiredData).toContainEqual(expect.objectContaining({ key: "poe1_atlas_routes_and_drop_sources" }));
+    expect(farming?.action).not.toMatch(/T16|Delirium|Breach|boss name/i);
+    expect(passive).toMatchObject({ status: "needs_personal_and_curated_data", confidence: "low" });
+    expect(passive?.action).toContain("Counts alone cannot identify missing nodes");
+    expect(filter).toMatchObject({ status: "needs_curated_data", confidence: "low" });
+    expect(filter?.action).toContain("preserving the existing FilterBlade/NeverSink presentation");
+    expect(filter?.requiredData).toContainEqual(expect.objectContaining({ key: "poe1_filter_item_classes" }));
+  });
+
+  it("is deterministic for identical snapshots", () => {
+    const input = { build: BUILD, progression: PROGRESSION, stash: STASH } as const;
+    expect(buildProgressionRoute(input)).toEqual(buildProgressionRoute(input));
+  });
+});
