@@ -1,8 +1,8 @@
 import { poe1Provider } from "./game-provider";
 import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeDataset } from "./passive-tree-data";
-import type { BuildManifest, BuildRole, BuildSkillGroup, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
+import type { BuildManifest, BuildRole, BuildSkillGroup, EquipmentItemDetailFacts, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
 
-export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.4.0" as const;
+export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.5.0" as const;
 
 export type RouteEvidenceSource =
   | "route_rules"
@@ -56,12 +56,12 @@ export interface EquipmentSlotComparison {
     readonly label: string;
     readonly rarity?: string;
     readonly baseType?: string;
-  };
+  } & EquipmentItemDetailFacts;
   readonly targetItem?: {
     readonly label: string;
     readonly rarity?: string;
     readonly baseType?: string;
-  };
+  } & EquipmentItemDetailFacts;
 }
 
 export interface SkillTransitionComparison {
@@ -113,7 +113,7 @@ export interface ProgressionRouteStep {
   readonly target?: string;
   readonly targetQuantity?: number;
   readonly ownedQuantity?: number;
-  /** Visible item labels compared between saved ACTIVE and target PoB sets only. */
+  /** Bounded imported item facts compared between saved ACTIVE and target PoB sets only. */
   readonly equipmentComparison?: EquipmentSlotComparison;
   /** Main skill/support names compared between saved ACTIVE and target PoB groups. */
   readonly skillTransition?: SkillTransitionComparison;
@@ -148,7 +148,7 @@ export interface RouteStashSnapshot {
 
 export interface ProgressionRouteInput {
   readonly build: BuildManifest;
-  /** ACTIVE PoB snapshot used for passive-node and visible equipment-label comparisons. */
+  /** ACTIVE PoB snapshot used for passive-node and visible equipment-fact comparisons. */
   readonly currentBuild?: BuildManifest;
   readonly progression: RouteProgressionSnapshot;
   readonly stash?: RouteStashSnapshot | null;
@@ -509,9 +509,9 @@ function buildEquipmentComparisonSteps(input: {
       const activeLabel = activeFact?.label ?? "No parsed item in ACTIVE PoB";
       const targetLabel = targetFact?.label ?? "No parsed item in target PoB";
       const action = relation === "changed"
-        ? `The ACTIVE PoB records ${activeLabel} in ${slotName}; the target PoB records ${targetLabel}. This is a saved-profile difference, not proof that the target item is better or that the ACTIVE PoB matches the live character. Confirm current gear and compare full item properties before deciding to farm or craft.`
+        ? `The ACTIVE PoB records ${activeLabel} in ${slotName}; the target PoB records ${targetLabel}. When present, imported property and modifier-like lines are evidence only; no affix-tier or build-value calculation proves the target is better. Confirm current gear before deciding to farm or craft.`
         : relation === "unresolved"
-          ? `The ACTIVE and target PoB records for ${slotName} do not contain enough matching name/base information to compare. Review both exports and confirm the live character before treating this slot as a gear gap.`
+          ? `The ACTIVE and target PoB records for ${slotName} do not contain enough complete item facts to compare. Review both exports and confirm the live character before treating this slot as a gear gap.`
         : relation === "target_only"
           ? `The target PoB records ${targetLabel} in ${slotName}, while the ACTIVE PoB has no parsed item there. Confirm the live character and league stash before treating this as an acquisition goal.`
           : `The ACTIVE PoB records ${activeLabel} in ${slotName}, while the target PoB has no parsed item there. This may be an intentionally empty target slot or an incomplete PoB export; confirm before changing the route or selling the item.`;
@@ -519,7 +519,7 @@ function buildEquipmentComparisonSteps(input: {
       steps.push({
         id: `equipment-comparison:${currentBuild.id}:${build.id}:${slotKey}:${index + 1}`,
         kind: "equipment_comparison",
-        status: "needs_personal_data",
+        status: "needs_personal_and_curated_data",
         title: `Review gear difference: ${slotName}`,
         action,
         confidence: "low",
@@ -547,9 +547,9 @@ function buildEquipmentComparisonSteps(input: {
             description: "The ACTIVE PoB is a saved build profile, not a live character sync. Confirm the current equipped item in game before treating this slot as a gap.",
           },
           {
-            category: "personal",
-            key: "full_equipped_item_properties",
-            description: "The current manifest keeps item names and base types but not modifiers, so it cannot decide whether the target is a real upgrade or provide a safe craft plan.",
+            category: "curated",
+            key: "poe1_item_modifier_and_build_value_rules",
+            description: "PoB item property and modifier-like text is preserved when available, but reviewed patch-versioned affix, defense, and build-value rules are needed before ranking an upgrade or prescribing a craft.",
           },
         ],
         target: slotName,
@@ -588,8 +588,47 @@ function compareVisibleEquipmentIdentity(
   if ((leftName && rightName && leftName !== rightName) || (leftBase && rightBase && leftBase !== rightBase)) {
     return "changed";
   }
-  if ((leftName && leftName === rightName) || (leftBase && leftBase === rightBase)) return "same";
+  if ((leftName && leftName === rightName) || (leftBase && leftBase === rightBase)) {
+    return compareEquipmentDetailFacts(left, right);
+  }
   return "unresolved";
+}
+
+function compareEquipmentDetailFacts(left: EquippedItemFact, right: EquippedItemFact): "same" | "changed" | "unresolved" {
+  const leftHasFacts = hasEquipmentDetailFacts(left);
+  const rightHasFacts = hasEquipmentDetailFacts(right);
+  if (!leftHasFacts && !rightHasFacts) return "same";
+  if (!leftHasFacts || !rightHasFacts || !left.detailTextComplete || !right.detailTextComplete) return "unresolved";
+  if (
+    left.itemLevel !== right.itemLevel ||
+    left.quality !== right.quality ||
+    normalizeEquipmentText(left.socketLayout ?? "") !== normalizeEquipmentText(right.socketLayout ?? "") ||
+    normalizedEquipmentProperties(left) !== normalizedEquipmentProperties(right) ||
+    normalizedEquipmentLines(left.modifierLines ?? []) !== normalizedEquipmentLines(right.modifierLines ?? []) ||
+    normalizedEquipmentLines(left.itemFlags ?? []) !== normalizedEquipmentLines(right.itemFlags ?? [])
+  ) return "changed";
+  return "same";
+}
+
+function hasEquipmentDetailFacts(item: EquippedItemFact): boolean {
+  return item.detailTextComplete !== undefined
+    || item.itemProperties !== undefined
+    || item.modifierLines !== undefined
+    || item.itemFlags !== undefined
+    || item.itemLevel !== undefined
+    || item.quality !== undefined
+    || item.socketLayout !== undefined;
+}
+
+function normalizedEquipmentProperties(item: EquippedItemFact): string {
+  return (item.itemProperties ?? [])
+    .map((property) => `${normalizeEquipmentText(property.name)}\u0000${normalizeEquipmentText(property.value)}`)
+    .sort()
+    .join("\n");
+}
+
+function normalizedEquipmentLines(lines: readonly string[]): string {
+  return lines.map(normalizeEquipmentText).sort().join("\n");
 }
 
 function equipmentItemSummary(item: EquippedItemFact): NonNullable<EquipmentSlotComparison["activeItem"]> {
@@ -601,6 +640,13 @@ function equipmentItemSummary(item: EquippedItemFact): NonNullable<EquipmentSlot
     label,
     ...(item.rarity ? { rarity: item.rarity } : {}),
     ...(item.baseType ? { baseType: item.baseType } : {}),
+    ...(item.itemLevel !== undefined ? { itemLevel: item.itemLevel } : {}),
+    ...(item.quality !== undefined ? { quality: item.quality } : {}),
+    ...(item.socketLayout ? { socketLayout: item.socketLayout } : {}),
+    ...(item.itemProperties !== undefined ? { itemProperties: item.itemProperties } : {}),
+    ...(item.modifierLines !== undefined ? { modifierLines: item.modifierLines } : {}),
+    ...(item.itemFlags !== undefined ? { itemFlags: item.itemFlags } : {}),
+    ...(item.detailTextComplete !== undefined ? { detailTextComplete: item.detailTextComplete } : {}),
   };
 }
 

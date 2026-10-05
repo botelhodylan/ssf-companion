@@ -100,7 +100,21 @@ export interface BuildSkillSetFact {
   readonly groups: readonly BuildSkillGroup[];
 }
 
-export interface EquippedItemFact {
+export interface EquipmentItemDetailFacts {
+  readonly itemLevel?: number;
+  readonly quality?: number;
+  /** Socket colors and group breaks exactly as displayed by the PoB item text. */
+  readonly socketLayout?: string;
+  /** Display properties parsed as labels and values; not interpreted as affixes. */
+  readonly itemProperties?: readonly EquipmentItemPropertyFact[];
+  /** Modifier-like item text lines retained without assigning affix IDs or tiers. */
+  readonly modifierLines?: readonly string[];
+  readonly itemFlags?: readonly string[];
+  /** False when a bounded PoB text section was truncated during import. */
+  readonly detailTextComplete?: boolean;
+}
+
+export interface EquippedItemFact extends EquipmentItemDetailFacts {
   readonly slotName: string;
   readonly itemId: string;
   /** The raw item-text rarity normalized to uppercase, if present. */
@@ -109,6 +123,11 @@ export interface EquippedItemFact {
   readonly itemName?: string;
   readonly uniqueName?: string;
   readonly baseType?: string;
+}
+
+export interface EquipmentItemPropertyFact {
+  readonly name: string;
+  readonly value: string;
 }
 
 /** One named PoB gear loadout. Items refer only to item records in that set. */

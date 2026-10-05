@@ -7,6 +7,7 @@ import type {
   BuildSkillGroup,
   BuildSkillSetFact,
   BuildSkillSummary,
+  EquipmentItemPropertyFact,
   BuildSourceFetchPlan,
   EquippedItemFact,
   ItemGoal,
@@ -32,6 +33,12 @@ const MAX_BUILD_SETS = 64;
 const MAX_SKILL_GROUPS_PER_SET = 64;
 const MAX_GEMS_PER_GROUP = 32;
 const MAX_EQUIPPED_SLOTS = 64;
+const MAX_ITEM_PROPERTY_FACTS = 32;
+const MAX_ITEM_MODIFIER_LINES = 48;
+const MAX_ITEM_FLAGS = 16;
+const MAX_ITEM_TEXT_CHARACTERS = 40_000;
+const MAX_ITEM_TEXT_LINES = 128;
+const MAX_ITEM_TEXT_LINE_CHARACTERS = 320;
 const MAX_PASSIVE_NODE_IDS = 500;
 
 /**
@@ -464,7 +471,7 @@ function parseEquipmentSets(xml: string, warnings: string[]): BuildEquipmentSetF
     const attributes = readAttributes(match[1] ?? "");
     const itemId = attributes.id;
     if (!itemId || !referencedIds.has(itemId)) continue;
-    const parsed = parsePobItemText(match[2] ?? "");
+    const parsed = parsePobItemText(match[2] ?? "", warnings);
     if (parsed) itemRecords.set(itemId, parsed);
     if (referencedIds.size && itemRecords.size === referencedIds.size) break;
   }
@@ -486,6 +493,13 @@ function parseEquipmentSets(xml: string, warnings: string[]): BuildEquipmentSetF
         ...(parsed.itemName ? { itemName: parsed.itemName } : {}),
         ...(parsed.rarity === "UNIQUE" && parsed.itemName ? { uniqueName: parsed.itemName } : {}),
         ...(parsed.baseType ? { baseType: parsed.baseType } : {}),
+        ...(parsed.itemLevel !== undefined ? { itemLevel: parsed.itemLevel } : {}),
+        ...(parsed.quality !== undefined ? { quality: parsed.quality } : {}),
+        ...(parsed.socketLayout ? { socketLayout: parsed.socketLayout } : {}),
+        itemProperties: parsed.itemProperties,
+        modifierLines: parsed.modifierLines,
+        itemFlags: parsed.itemFlags,
+        detailTextComplete: parsed.detailTextComplete,
       });
     }
     return {
@@ -504,25 +518,153 @@ interface ParsedPobItem {
   readonly rarity?: string;
   readonly itemName?: string;
   readonly baseType?: string;
+  readonly itemLevel?: number;
+  readonly quality?: number;
+  readonly socketLayout?: string;
+  readonly itemProperties: readonly EquipmentItemPropertyFact[];
+  readonly modifierLines: readonly string[];
+  readonly itemFlags: readonly string[];
+  readonly detailTextComplete: boolean;
 }
 
-function parsePobItemText(rawText: string): ParsedPobItem | undefined {
-  const lines = decodeXml(rawText)
+function parsePobItemText(rawText: string, warnings: string[]): ParsedPobItem | undefined {
+  let detailTextComplete = rawText.length <= MAX_ITEM_TEXT_CHARACTERS;
+  if (!detailTextComplete) pushParseWarningOnce(warnings, `PoB item text above ${MAX_ITEM_TEXT_CHARACTERS} characters was clipped.`);
+  const allLines = decodeXml(rawText.slice(0, MAX_ITEM_TEXT_CHARACTERS))
+    .replace(/<br\s*\/?\s*>/gi, "\n")
     .replace(/<[^>]*>/g, "\n")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const rarityLine = lines.find((line) => /^rarity\s*:/i.test(line));
+  if (allLines.length > MAX_ITEM_TEXT_LINES) {
+    detailTextComplete = false;
+    pushParseWarningOnce(warnings, `PoB item text above ${MAX_ITEM_TEXT_LINES} lines was truncated.`);
+  }
+  const lines = allLines.slice(0, MAX_ITEM_TEXT_LINES);
+  const boundedLines = lines.map((line) => {
+    if (line.length <= MAX_ITEM_TEXT_LINE_CHARACTERS) return line;
+    detailTextComplete = false;
+    pushParseWarningOnce(warnings, `Some PoB item lines exceeded ${MAX_ITEM_TEXT_LINE_CHARACTERS} characters and were clipped.`);
+    return line.slice(0, MAX_ITEM_TEXT_LINE_CHARACTERS);
+  });
+  const rarityIndex = boundedLines.findIndex((line) => /^rarity\s*:/i.test(line));
+  const rarityLine = rarityIndex < 0 ? undefined : boundedLines[rarityIndex];
   if (!rarityLine) return undefined;
   const rarity = rarityLine.replace(/^rarity\s*:/i, "").trim().toUpperCase();
-  const details = lines.slice(lines.indexOf(rarityLine) + 1);
-  if (!details.length) return { rarity };
-  if (rarity === "NORMAL") return { rarity, baseType: details[0] };
+  const itemFlags: string[] = [];
+  const itemProperties: EquipmentItemPropertyFact[] = [];
+  let itemLevel: number | undefined;
+  let quality: number | undefined;
+  let socketLayout: string | undefined;
+  const unidentified = boundedLines.slice(rarityIndex + 1).some((line) => line.toLowerCase() === "unidentified");
+  const identityLines = remainingLinesForItemIdentity(boundedLines.slice(rarityIndex + 1), rarity, unidentified);
+  let identityLineCursor = 0;
+  const remainingLines: string[] = [];
+
+  for (let index = rarityIndex + 1; index < boundedLines.length; index += 1) {
+    const line = boundedLines[index];
+    if (!line || line === "--------") continue;
+    if (isPobItemFlag(line)) {
+      if (itemFlags.length < MAX_ITEM_FLAGS && !itemFlags.includes(line)) itemFlags.push(line);
+      else if (itemFlags.length >= MAX_ITEM_FLAGS) {
+        detailTextComplete = false;
+        pushParseWarningOnce(warnings, `PoB item status lines above ${MAX_ITEM_FLAGS} entries were truncated.`);
+      }
+      continue;
+    }
+    const property = parsePobItemProperty(line);
+    if (!property) {
+      if (line === identityLines[identityLineCursor]) {
+        identityLineCursor += 1;
+        continue;
+      }
+      remainingLines.push(line);
+      continue;
+    }
+    const normalizedName = property.name.toLowerCase();
+    if (normalizedName === "rarity" || normalizedName === "item class" || normalizedName === "note" || normalizedName === "source") continue;
+    if (normalizedName === "item level") {
+      const parsed = property.value.match(/^(\d{1,3})\b/);
+      if (parsed?.[1]) itemLevel = Number(parsed[1]);
+      continue;
+    }
+    if (normalizedName === "quality") {
+      const parsed = property.value.match(/^[+−-]?(\d{1,3})(?:\.\d+)?\s*%?/);
+      if (parsed?.[1]) quality = Number(parsed[1]);
+      continue;
+    }
+    if (normalizedName === "sockets") {
+      const value = property.value.replace(/\s+/g, " ").trim();
+      if (/^[RGBWA]+(?:[- ][RGBWA]+)*$/i.test(value)) socketLayout = value.toUpperCase();
+      continue;
+    }
+    if (itemProperties.length < MAX_ITEM_PROPERTY_FACTS) itemProperties.push(property);
+    else {
+      detailTextComplete = false;
+      pushParseWarningOnce(warnings, `PoB item property sections above ${MAX_ITEM_PROPERTY_FACTS} entries were truncated.`);
+    }
+  }
+
+  if (remainingLines.length > MAX_ITEM_MODIFIER_LINES) {
+    detailTextComplete = false;
+    pushParseWarningOnce(warnings, `PoB item detail sections above ${MAX_ITEM_MODIFIER_LINES} modifier lines were truncated.`);
+  }
+  const cappedModifierLines = remainingLines.slice(0, MAX_ITEM_MODIFIER_LINES);
+  const clippedFlags = itemFlags.slice(0, MAX_ITEM_FLAGS);
+  let itemName: string | undefined;
+  let baseType: string | undefined;
+  if (rarity === "NORMAL") {
+    baseType = identityLines[0];
+  } else if (unidentified) {
+    baseType = identityLines[0];
+  } else {
+    itemName = identityLines[0];
+    baseType = identityLines[1];
+  }
+
   return {
     rarity,
-    itemName: details[0],
-    ...(details[1] ? { baseType: details[1] } : {}),
+    ...(itemName ? { itemName } : {}),
+    ...(baseType ? { baseType } : {}),
+    ...(itemLevel !== undefined ? { itemLevel } : {}),
+    ...(quality !== undefined ? { quality } : {}),
+    ...(socketLayout ? { socketLayout } : {}),
+    itemProperties,
+    modifierLines: cappedModifierLines,
+    itemFlags: clippedFlags,
+    detailTextComplete,
   };
+}
+
+function remainingLinesForItemIdentity(lines: readonly string[], rarity: string, unidentified: boolean): string[] {
+  const result: string[] = [];
+  const identityLineCount = rarity === "NORMAL" || unidentified ? 1 : 2;
+  for (const line of lines) {
+    if (line === "--------" || isPobItemFlag(line) || parsePobItemProperty(line)) continue;
+    if (result.length >= identityLineCount) break;
+    result.push(line);
+  }
+  return result;
+}
+
+function parsePobItemProperty(line: string): EquipmentItemPropertyFact | undefined {
+  const colonProperty = line.match(/^([^:]{1,64}):\s*(.+)$/);
+  if (colonProperty?.[1] && colonProperty[2]) {
+    return { name: colonProperty[1].trim(), value: colonProperty[2].trim() };
+  }
+  const requirement = line.match(/^(Requires\s+(?:Level|Str|Dex|Int|Class))\s+(.+)$/i);
+  if (requirement?.[1] && requirement[2]) {
+    return { name: requirement[1], value: requirement[2].trim() };
+  }
+  return undefined;
+}
+
+function isPobItemFlag(line: string): boolean {
+  return /^(?:unidentified|corrupted|mirrored|split|fractured item|synthesised item|shaper item|elder item|crusader item|redeemer item|hunter item|warlord item|veiled prefix|veiled suffix|foil(?:ed)? unique(?:\s*\(.+\))?)$/i.test(line);
+}
+
+function pushParseWarningOnce(warnings: string[], message: string): void {
+  if (!warnings.includes(message)) warnings.push(message);
 }
 
 function itemGoalsFromEquippedItems(items: readonly EquippedItemFact[]): ItemGoal[] {

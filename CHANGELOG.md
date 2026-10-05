@@ -10,6 +10,7 @@ This project follows a simple release history. Changes are grouped by version; G
 - Add an optional combined Markdown handoff that places current audit references and existing style directives alongside build-aware priority recommendations.
 - Optionally index local FilterBlade `CustomizerDefault.options` rule labels and attach exact matches to the read-only filter audit and Markdown handoff.
 - Preserve and display all named PoB skill and equipment sets, with active selections distinguished from alternate setups.
+- Import bounded PoB item level, quality, socket layout, display properties, item flags, and modifier-like lines across active and alternate gear sets; include differences in the route as inspectable evidence without ranking the items.
 - Pair each priority target with its bounded candidate NeverSink/FilterBlade rule references in the Markdown handoff, while labeling them as clues rather than effective filter outcomes.
 - Harden the disabled Windows signing workflow with SignPath configuration, binary metadata, signer-identity, and release-checksum gates.
 - Compare ACTIVE and target PoB equipment labels by slot to surface build-transition differences, while requiring live gear and item modifiers before calling any difference an upgrade.

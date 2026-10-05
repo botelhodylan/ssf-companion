@@ -46,7 +46,7 @@
 ## Phase 5 — Route modules
 
 - Compare current and target gear to identify slot-level upgrade gaps, stash-owned inputs, and achievable crafts.
-- **Partially delivered:** Compare ACTIVE and target PoB equipment labels by slot and surface changed, target-only, or ACTIVE-only records. The route does not claim an upgrade until current-character gear and comparable item properties are available.
+- **Partially delivered:** Compare ACTIVE and target PoB equipment by slot and surface item labels plus bounded item-level, quality, sockets, display properties, flags, and modifier-like text. The route does not claim an upgrade until current-character equipment and reviewed patch-versioned affix/build-value rules are available.
 - **Partially delivered:** Compare the saved ACTIVE and target PoB main skill/support gem groups and show added/removed supports. Live socket state and reviewed gem quest/vendor progression are still required before recommending a switch or acquisition timing.
 - Generate step-by-step deterministic crafts, including base requirements, materials, unlocks, operation order, expected risk, and stop conditions.
 - Recommend target-farm methods and the corresponding Atlas passives using item source data and the player's owned maps/trees.

@@ -17,7 +17,7 @@ import {
   Settings2,
   UserRound,
 } from "lucide-react";
-import type { BuildManifest, BuildRole, ItemGoal, ProgressionStage } from "./core/types";
+import type { BuildManifest, BuildRole, EquippedItemFact, EquipmentItemDetailFacts, ItemGoal, ProgressionStage } from "./core/types";
 import { normalizeBuildInput } from "./core/build-import";
 import { buildProgressionRoute, type ProgressionRouteStep } from "./core/progression-route";
 import { auditFilterBladeFile, type FilterBladeAudit } from "./core/filterblade-audit";
@@ -128,6 +128,54 @@ function sourceLabel(kind: BuildManifest["source"]["kind"]): string {
   if (kind === "pob_code") return "Path of Building";
   if (kind === "sample") return "Example data";
   return "Local import";
+}
+
+function equipmentItemLabel(item: Pick<EquippedItemFact, "uniqueName" | "itemName" | "baseType">): string {
+  const name = item.uniqueName ?? item.itemName;
+  if (name && item.baseType && name.trim().toLocaleLowerCase("en-US") !== item.baseType.trim().toLocaleLowerCase("en-US")) {
+    return `${name} (${item.baseType})`;
+  }
+  return name ?? item.baseType ?? "Item details unavailable";
+}
+
+function EquipmentItemFacts({ facts }: { readonly facts: EquipmentItemDetailFacts }) {
+  const summaryFacts = [
+    facts.itemLevel !== undefined ? `ilvl ${facts.itemLevel}` : undefined,
+    facts.quality !== undefined ? `${facts.quality}% quality` : undefined,
+    facts.socketLayout ? `Sockets ${facts.socketLayout}` : undefined,
+    ...(facts.itemProperties ?? []).slice(0, 3).map((property) => `${property.name}: ${property.value}`),
+    (facts.itemProperties?.length ?? 0) > 3 ? `+${(facts.itemProperties?.length ?? 0) - 3} properties` : undefined,
+    (facts.modifierLines?.length ?? 0) > 0 ? `${facts.modifierLines?.length} imported modifier-like lines` : undefined,
+    facts.itemFlags?.length ? facts.itemFlags.join(", ") : undefined,
+  ].filter((value): value is string => Boolean(value));
+  const hasImportedLines = Boolean(facts.itemProperties?.length || facts.modifierLines?.length || facts.itemFlags?.length);
+  if (!summaryFacts.length && !hasImportedLines && facts.detailTextComplete !== false) return null;
+
+  return (
+    <div className="build-item-fact-data">
+      {summaryFacts.length ? <p>{summaryFacts.join(" · ")}</p> : null}
+      {hasImportedLines || facts.detailTextComplete === false ? (
+        <details className="build-item-source-details">
+          <summary>Imported PoB item text</summary>
+          {facts.itemProperties?.length ? (
+            <div>
+              <strong>Item property lines</strong>
+              <ul>{facts.itemProperties.map((property, index) => <li key={`${property.name}-${index}`}>{property.name}: {property.value}</li>)}</ul>
+            </div>
+          ) : null}
+          {facts.modifierLines?.length ? (
+            <div>
+              <strong>Other item lines</strong>
+              <ul>{facts.modifierLines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}</ul>
+            </div>
+          ) : null}
+          {facts.itemFlags?.length ? <p>Item flags: {facts.itemFlags.join(", ")}</p> : null}
+          {facts.detailTextComplete === false ? <p>Some item text exceeded import limits and was clipped. The displayed facts are incomplete.</p> : null}
+          <small>Lines are preserved for review; they are not mapped to affix IDs, tiers, or an item-value calculation.</small>
+        </details>
+      ) : null}
+    </div>
+  );
 }
 
 function extractProviderPayload(raw: string): string[] {
@@ -928,7 +976,16 @@ export default function App() {
                               <span className={set.isActive ? "build-set-state is-active" : "build-set-state"}>{set.isActive ? "ACTIVE" : "ALTERNATIVE"}</span>
                               {set.useSecondWeaponSet && <small>Second weapon set</small>}
                             </div>
-                            <p>{set.equippedItems.length ? set.equippedItems.map((item) => `${item.slotName}: ${item.uniqueName ?? item.itemName ?? item.baseType ?? "Item"}`).join(" · ") : "No equipped item slots found."}</p>
+                            {set.equippedItems.length ? (
+                              <ul className="build-equipment-items">
+                                {set.equippedItems.map((item, index) => (
+                                  <li key={`${set.id}-${item.slotName}-${item.itemId}-${index}`}>
+                                    <strong>{item.slotName}: {equipmentItemLabel(item)}</strong>
+                                    <EquipmentItemFacts facts={item} />
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : <p>No equipped item slots found.</p>}
                           </li>
                         ))}
                       </ul>
@@ -1217,13 +1274,15 @@ export default function App() {
                           <div>
                             <span>ACTIVE PoB</span>
                             <p>{selectedRouteStep.equipmentComparison.activeItem?.label ?? "No parsed item in this slot"}</p>
+                            {selectedRouteStep.equipmentComparison.activeItem && <EquipmentItemFacts facts={selectedRouteStep.equipmentComparison.activeItem} />}
                           </div>
                           <div>
                             <span>Target PoB</span>
                             <p>{selectedRouteStep.equipmentComparison.targetItem?.label ?? "No parsed item in this slot"}</p>
+                            {selectedRouteStep.equipmentComparison.targetItem && <EquipmentItemFacts facts={selectedRouteStep.equipmentComparison.targetItem} />}
                           </div>
                         </div>
-                        <p className="equipment-comparison-note">This compares saved item labels and base types only. It does not read live character gear or compare item modifiers, so it cannot say whether one item is an upgrade.</p>
+                        <p className="equipment-comparison-note">PoB item levels, quality, sockets, display properties, flags, and modifier-like lines are included when available. They are not normalized to affix tiers or evaluated for this build, and the route does not read live character gear; it cannot claim that one item is an upgrade.</p>
                       </div>
                     )}
                     {selectedRouteStep.skillTransition && (

@@ -415,7 +415,7 @@ describe("buildProgressionRoute", () => {
 
     expect(comparisons).toHaveLength(4);
     expect(comparisons.find((step) => step.target === "Helmet")).toMatchObject({
-      status: "needs_personal_data",
+      status: "needs_personal_and_curated_data",
       confidence: "low",
       equipmentComparison: {
         relation: "changed",
@@ -440,13 +440,78 @@ describe("buildProgressionRoute", () => {
       activeItem: { label: "Item details unavailable" },
       targetItem: { label: "Item details unavailable" },
     });
-    expect(comparisons.find((step) => step.target === "Belt")?.action).toContain("not contain enough matching name/base information");
+    expect(comparisons.find((step) => step.target === "Belt")?.action).toContain("do not contain enough complete item facts to compare");
     expect(comparisons.some((step) => step.target === "Ring 1")).toBe(false);
-    expect(comparisons.find((step) => step.target === "Helmet")?.action).toContain("not proof that the target item is better");
+    expect(comparisons.find((step) => step.target === "Helmet")?.action).toContain("no affix-tier or build-value calculation proves the target is better");
     expect(comparisons.find((step) => step.target === "Helmet")?.requiredData).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "confirmed_current_character_equipment", category: "personal" }),
-      expect.objectContaining({ key: "full_equipped_item_properties", category: "personal" }),
+      expect.objectContaining({ key: "poe1_item_modifier_and_build_value_rules", category: "curated" }),
     ]));
+  });
+
+  it("surfaces imported item-text changes for matching gear without ranking either item", () => {
+    const activeItem = {
+      slotName: "Ring 1",
+      itemId: "active-ring",
+      rarity: "RARE",
+      itemName: "Foe Loop",
+      baseType: "Two-Stone Ring",
+      itemLevel: 76,
+      quality: 20,
+      socketLayout: "R-G",
+      itemProperties: [{ name: "Fire Resistance", value: "+12%" }],
+      modifierLines: ["+74 to maximum Life", "+36% to Lightning Resistance"],
+      itemFlags: [],
+      detailTextComplete: true,
+    };
+    const targetItem = {
+      ...activeItem,
+      itemId: "target-ring",
+      itemLevel: 82,
+      modifierLines: ["+92 to maximum Life", "+41% to Lightning Resistance"],
+    };
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      id: "active-ring-facts",
+      role: "ACTIVE",
+      equippedItems: [activeItem],
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      id: "next-ring-facts",
+      role: "NEXT",
+      equippedItems: [targetItem],
+    };
+
+    const route = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION });
+    const comparison = route.steps.find((step) => step.kind === "equipment_comparison");
+
+    expect(comparison).toMatchObject({
+      status: "needs_personal_and_curated_data",
+      equipmentComparison: {
+        relation: "changed",
+        activeItem: { itemLevel: 76, modifierLines: ["+74 to maximum Life", "+36% to Lightning Resistance"] },
+        targetItem: { itemLevel: 82, modifierLines: ["+92 to maximum Life", "+41% to Lightning Resistance"] },
+      },
+    });
+    expect(comparison?.action).toContain("no affix-tier or build-value calculation proves the target is better");
+    expect(comparison?.requiredData).toContainEqual(expect.objectContaining({
+      category: "curated",
+      key: "poe1_item_modifier_and_build_value_rules",
+    }));
+
+    const sameDetails = buildProgressionRoute({
+      build: { ...targetBuild, equippedItems: [activeItem] },
+      currentBuild,
+      progression: PROGRESSION,
+    });
+    const incompleteDetails = buildProgressionRoute({
+      build: { ...targetBuild, equippedItems: [{ ...activeItem, detailTextComplete: false }] },
+      currentBuild,
+      progression: PROGRESSION,
+    });
+    expect(sameDetails.steps.some((step) => step.kind === "equipment_comparison")).toBe(false);
+    expect(incompleteDetails.steps.find((step) => step.kind === "equipment_comparison")?.equipmentComparison?.relation).toBe("unresolved");
   });
 
   it("compares ACTIVE and target main-skill support gems while requiring current and reviewed gem data", () => {

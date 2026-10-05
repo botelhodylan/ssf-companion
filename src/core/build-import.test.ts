@@ -26,7 +26,15 @@ Old Unique
 Old Ring</Item>
     <Item id="2">Rarity: RARE
 Foe Shell
-Torturer's Mask</Item>
+Torturer's Mask
+--------
+Item Level: 84
+Quality: +20%
+Sockets: R-G-G B-B-B
+Armour: 125
++90 to maximum Life
++45% to Fire Resistance
+Corrupted</Item>
     <Item id="3">Rarity: UNIQUE
 The Taming
 Prismatic Ring</Item>
@@ -100,6 +108,13 @@ describe("normalizeBuildInput", () => {
         rarity: "RARE",
         itemName: "Foe Shell",
         baseType: "Torturer's Mask",
+        itemLevel: 84,
+        quality: 20,
+        socketLayout: "R-G-G B-B-B",
+        itemProperties: [expect.objectContaining({ name: "Armour", value: "125" })],
+        modifierLines: ["+90 to maximum Life", "+45% to Fire Resistance"],
+        itemFlags: ["Corrupted"],
+        detailTextComplete: true,
       }),
       expect.objectContaining({
         slotName: "Ring 1",
@@ -137,6 +152,33 @@ describe("normalizeBuildInput", () => {
     expect(result.manifest?.parseWarnings).toEqual([]);
     expect(result.manifest?.confidence).toBe("high");
     expect(result.manifest?.source).not.toHaveProperty("rawCode");
+  });
+
+  it("parses a normal item's base without treating the base as a rare or unique name", async () => {
+    const normalItemXml = POB_XML.replace(
+      /<Item id="2">[\s\S]*?<\/Item>/,
+      "<Item id=\"2\">Rarity: NORMAL\r\nSimple Robe\r\nItem Level: 5</Item>",
+    );
+    const result = await normalizeBuildInput(normalItemXml);
+    const item = result.manifest?.equippedItems?.find((fact) => fact.slotName === "Helmet");
+
+    expect(item).toMatchObject({ rarity: "NORMAL", baseType: "Simple Robe", itemLevel: 5 });
+    expect(item).not.toHaveProperty("itemName");
+  });
+
+  it("clips oversized item text and marks the imported detail facts incomplete", async () => {
+    const longLine = "x".repeat(40_001);
+    const oversizedItemXml = POB_XML.replace(
+      "Corrupted</Item>",
+      `Corrupted\n${longLine}</Item>`,
+    );
+    const result = await normalizeBuildInput(oversizedItemXml);
+    const item = result.manifest?.equippedItems?.find((fact) => fact.slotName === "Helmet");
+
+    expect(result.status).toBe("partial");
+    expect(item?.detailTextComplete).toBe(false);
+    expect(item?.modifierLines).toContain("x".repeat(320));
+    expect(result.manifest?.parseWarnings).toContain("PoB item text above 40000 characters was clipped.");
   });
 
   it("inflates a pasted Path of Building code through the injectable local decoder", async () => {
