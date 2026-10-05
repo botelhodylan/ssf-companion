@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("ssfDesktop", {
   getAppVersion: () => ipcRenderer.invoke("app:version"),
   openBuildFile: () => ipcRenderer.invoke("build:open-file"),
   openPassiveTreeDataFile: () => ipcRenderer.invoke("tree:open-file"),
+  openAtlasTreeFile: () => ipcRenderer.invoke("atlas:open-file"),
   openFilterFile: () => ipcRenderer.invoke("filter:open-file"),
   fetchBuildUrl: (url, contact) => ipcRenderer.invoke("build:fetch-url", { url, contact }),
   saveExport: (name, content, format) => ipcRenderer.invoke("export:save", { name, content, format }),

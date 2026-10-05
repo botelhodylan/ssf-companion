@@ -507,6 +507,46 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .local-data-section strong { color: #e3dacb; font: 700 15px var(--display); }
 .local-data-section p { margin: 0; color: #bab9b0; font-size: 11px; }
 .local-data-section > span { width: 100%; color: #8d9490; font-size: 11px; }
+.atlas-tree-workspace { max-width: 1000px; }
+.atlas-tree-import.settings-section { margin-top: 29px; padding: 20px 0; }
+.atlas-tree-import .settings-input-label { margin-top: 13px; }
+.atlas-tree-import textarea { display: block; width: min(100%, 720px); min-height: 70px; padding: 10px 12px; border: 1px solid #434a49; border-radius: 4px; color: #eee4d4; background: #171c1d; font: 11px/1.5 "Cascadia Code", Consolas, monospace; resize: vertical; }
+.atlas-tree-import textarea::placeholder { color: #737b78; }
+.atlas-tree-import-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 13px; }
+.atlas-tree-import-actions .button { min-height: 37px; font-size: 11px; }
+.atlas-tree-import-actions .keyboard-hint { margin-left: 2px; }
+.atlas-tree-import .import-message { margin-left: 0; }
+.atlas-tree-no-league { margin-top: 11px; color: #d5ad77; font-size: 11px; }
+.atlas-tree-data-status { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; padding: 13px 14px; border: 1px solid #373f3e; border-radius: 4px; background: #181e1f; }
+.atlas-tree-data-status > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.atlas-tree-data-status strong { color: #d9d2c6; font: 700 13px/1.25 var(--display); }
+.atlas-tree-data-status span { color: #a3a69e; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.atlas-tree-data-status p { margin: 0; color: #7f8882; font-size: 9px; line-height: 1.45; }
+.atlas-tree-data-status > .text-link { flex: 0 0 auto; font-size: 10px; }
+.atlas-tree-data-status.is-loaded { border-color: #465747; }
+.atlas-tree-saved-section { margin-top: 27px; }
+.atlas-tree-saved-section .builds-page-toolbar { margin-top: 0; }
+.atlas-tree-list { display: flex; flex-direction: column; border-top: 1px solid #414949; }
+.atlas-tree-card { padding: 15px 14px; border-bottom: 1px solid #303838; background: rgba(255,255,255,.012); }
+.atlas-tree-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.atlas-tree-card-copy { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.atlas-tree-card-copy > strong { color: #e5dacc; font: 700 16px/1.25 var(--display); overflow-wrap: anywhere; }
+.atlas-tree-card-copy > span, .atlas-tree-card-copy > small { color: #8e9591; font-size: 10px; line-height: 1.4; }
+.atlas-tree-card-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 13px; }
+.atlas-tree-card-actions .text-link { font-size: 10px; white-space: nowrap; }
+.atlas-tree-remove { color: #c58e7d; }
+.atlas-tree-hash-details { margin-top: 11px; color: #aaa99f; font-size: 10px; }
+.atlas-tree-hash-details summary { width: fit-content; color: #d5a162; cursor: pointer; }
+.atlas-tree-hash-details code { display: block; max-height: 84px; overflow: auto; margin-top: 8px; color: #979e98; font: 9px/1.5 "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; }
+.atlas-tree-hash-details ul { display: flex; flex-direction: column; gap: 5px; max-height: 280px; overflow: auto; margin: 8px 0 0; padding: 0 8px 0 0; list-style: none; }
+.atlas-tree-hash-details li { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-left: 1px solid #554832; background: #1e2424; }
+.atlas-tree-hash-details li > span { display: flex; justify-content: space-between; gap: 10px; }
+.atlas-tree-hash-details li strong { color: #d8d0c3; font-size: 10px; font-weight: 600; }
+.atlas-tree-hash-details li code { max-height: unset; overflow: visible; margin: 0; color: #9ba097; font-size: 8px; text-align: right; }
+.atlas-tree-hash-details li small { color: #9b9f98; font-size: 9px; line-height: 1.45; }
+.atlas-tree-source { display: block; overflow: hidden; margin-top: 9px; color: #777f7b; font: 9px/1.4 "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-tree-empty { margin-top: 0; }
+.atlas-tree-limit-note { max-width: 850px; margin: 14px 0 0; color: #7c8580; font-size: 10px; line-height: 1.5; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px; background: rgba(4, 7, 8, .72); backdrop-filter: blur(4px); }
 .modal-window { width: min(100%, 510px); max-height: min(90vh, 760px); overflow: auto; border: 1px solid #515754; border-radius: 7px; background: #1b2122; box-shadow: 0 20px 65px rgba(0,0,0,.5); }
@@ -750,6 +790,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .route-context-card { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .route-context-stage { grid-column: span 2; }
   .route-tree-data { grid-template-columns: minmax(0, 1fr); }
+  .atlas-tree-card-heading { flex-direction: column; }
+  .atlas-tree-data-status { align-items: flex-start; flex-direction: column; }
+  .atlas-tree-card-actions { justify-content: flex-start; }
   .equipment-comparison-grid { grid-template-columns: minmax(0, 1fr); }
   .skill-transition-grid, .skill-transition-diff { grid-template-columns: minmax(0, 1fr); }
   .route-tree-data-controls { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }

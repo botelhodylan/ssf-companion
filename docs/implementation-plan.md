@@ -50,6 +50,7 @@
 - **Partially delivered:** Compare the saved ACTIVE and target PoB main skill/support gem groups and show added/removed supports. Live socket state and reviewed gem quest/vendor progression are still required before recommending a switch or acquisition timing.
 - Generate step-by-step deterministic crafts, including base requirements, materials, unlocks, operation order, expected risk, and stop conditions.
 - Recommend target-farm methods and the corresponding Atlas passives using item source data and the player's owned maps/trees.
+- **Partially delivered:** Import official GGG Atlas share URLs and local SSF Companion snapshots into league-scoped storage. A player-selected GGG Atlas export can provide node labels/stats for matching hashes; the export lacks a patch label, so validated patch mapping, account snapshots, and farm plans still need data/API work.
 - **Partially delivered:** Turn saved PoB specs into an inspectable graph traversal when the player imports matching local tree topology. This ordering is not a PoB-authored or optimized leveling guide. Do not compare node IDs across tree versions; next add progression checkpoints and reviewed class/tree guidance.
 - Model campaign-to-mapping checkpoints, map sustain, resistance/life/defense readiness, boss readiness, and build-transition readiness.
 - Make each item/route inspectable with current gap, reason, prerequisites, source, patch, confidence, and “not relevant” feedback.

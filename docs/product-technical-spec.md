@@ -140,6 +140,12 @@ The route planner is a deterministic core package between imported snapshots, ve
 - `LeagueSnapshot`: stash inventory, saved Atlas passive trees, and explicitly selected farming goals when available.
 - `RouteContext`: game version, league/content version, current progression stage, and player constraints (for example, SSF league type).
 
+### Atlas tree imports
+
+The local Atlas adapter accepts HTTPS share URLs from GGG's official `pathofexile.com/atlas-skill-tree` viewer and local text files containing such a URL. It validates PoE 1's documented URL encoding, requires the Atlas class/ascendancy bytes and extended/mastery hash lists to be empty, and stores the selected 16-bit node skill hashes plus Standard/Ruthless ruleset with the selected league. It also exports a small SSF Companion JSON snapshot that can be re-imported offline; the snapshot is checked against its original GGG share URL before acceptance. Importing a share link does not make a network request. A player may separately select GGG's `atlastree-export` `data.json`; the app reduces it to local node names, stats, and links for hash lookup and does not bundle the source file.
+
+GGG's [developer reference](https://www.pathofexile.com/developer/docs/reference#extra-definitions) documents the base64url URL payload and Atlas-specific constraints. GGG's [Atlas export repository](https://github.com/grindinggear/atlastree-export) describes `data.json` as exported Atlas data. That file does not declare its PoE patch, so names/stats shown from it are unverified references; the app does not make patch-sensitive acquisition recommendations from them. The separate league-account API can provide saved Atlas trees under `account:league_accounts` once an approved OAuth client is available.
+
 Each snapshot can be absent. The planner must still work from a PoB alone, but must label its result “build target only” and must not claim to know the player's missing gear, stash, current passive allocations, or Atlas allocations.
 
 ### Route step contract

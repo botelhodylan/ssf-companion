@@ -6,6 +6,7 @@ const { fileURLToPath } = require("node:url");
 const APP_VERSION = require("../package.json").version;
 const MAX_BUILD_BYTES = 1_500_000;
 const MAX_TREE_EXPORT_BYTES = 12_000_000;
+const MAX_ATLAS_TREE_BYTES = 12_000_000;
 const MAX_FILTER_BYTES = 8_000_000;
 const MAX_EXPORT_BYTES = 8_000_000;
 const ALLOWED_EXTERNAL_HOSTS = new Set(["filterblade.xyz", "www.filterblade.xyz", "pathofexile.com", "www.pathofexile.com", "github.com"]);
@@ -209,6 +210,20 @@ app.whenReady().then(() => {
     if (!stats.isFile() || stats.size > MAX_TREE_EXPORT_BYTES) throw new Error("The selected tree export is too large to import safely.");
     const content = await fs.readFile(result.filePaths[0], "utf8");
     if (Buffer.byteLength(content, "utf8") > MAX_TREE_EXPORT_BYTES) throw new Error("The selected tree export is too large to import safely.");
+    return { name: path.basename(result.filePaths[0]), content };
+  });
+  ipcMain.handle("atlas:open-file", async (event) => {
+    assertTrustedRenderer(event);
+    const result = await dialog.showOpenDialog({
+      title: "Import a PoE 1 Atlas URL, GGG data export, or local snapshot",
+      properties: ["openFile"],
+      filters: [{ name: "Atlas tree links and snapshots", extensions: ["txt", "json", "atlas"] }, { name: "All files", extensions: ["*"] }],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const stats = await fs.stat(result.filePaths[0]);
+    if (!stats.isFile() || stats.size > MAX_ATLAS_TREE_BYTES) throw new Error("The selected Atlas tree file is too large to import safely.");
+    const content = await fs.readFile(result.filePaths[0], "utf8");
+    if (Buffer.byteLength(content, "utf8") > MAX_ATLAS_TREE_BYTES) throw new Error("The selected Atlas tree file is too large to import safely.");
     return { name: path.basename(result.filePaths[0]), content };
   });
   ipcMain.handle("filter:open-file", async (event) => {

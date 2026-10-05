@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Home,
   ListFilter,
+  Map,
   Plus,
   Route as RouteIcon,
   Settings2,
@@ -21,15 +22,17 @@ import { normalizeBuildInput } from "./core/build-import";
 import { buildProgressionRoute, type ProgressionRouteStep } from "./core/progression-route";
 import { auditFilterBladeFile, type FilterBladeAudit } from "./core/filterblade-audit";
 import { parsePassiveTreeExport, type PassiveTreeDataset } from "./core/passive-tree-data";
+import type { AtlasTreeDataset, AtlasTreeImport, SavedAtlasTree } from "./core/atlas-tree-import";
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
 import { rankItemsByRelevance } from "./core/relevance";
 import { AccountSyncStrip } from "./components/AccountSyncStrip";
+import { AtlasTreesPage } from "./components/AtlasTreesPage";
 import { ExplanationPanel } from "./components/ExplanationPanel";
 import { Modal } from "./components/Modal";
 import { PriorityTable, type PriorityRow } from "./components/PriorityTable";
 import { goalsForBuilds, SAMPLE_BUILD_SET } from "./demo-data";
 
-type Page = "Overview" | "Builds" | "Progression route" | "Loot filter" | "Account";
+type Page = "Overview" | "Builds" | "Progression route" | "Atlas trees" | "Loot filter" | "Account";
 type DialogKind = "connect" | "league" | "character" | null;
 type StoredLeague = { id: string; name: string };
 type StoredCharacter = {
@@ -58,6 +61,8 @@ const STORAGE = {
   contact: "ssf-companion:pobb-contact:v2",
   legacyContact: "ssf-companion:pobb-contact:v1",
   passiveTreeData: "ssf-companion:passive-tree-data:v1",
+  atlasTrees: "ssf-companion:atlas-trees:v1",
+  atlasTreeData: "ssf-companion:atlas-tree-data:v1",
 };
 
 const ROLE_LABELS: readonly BuildRole[] = ["ACTIVE", "NEXT", "INTERESTED"];
@@ -71,6 +76,7 @@ const PAGE_ICONS = {
   Overview: Home,
   Builds: BookOpen,
   "Progression route": RouteIcon,
+  "Atlas trees": Map,
   "Loot filter": ListFilter,
   Account: UserRound,
 } satisfies Record<Page, typeof Home>;
@@ -155,6 +161,8 @@ export default function App() {
     readStorage<string>(STORAGE.legacyContact, "").trim() || GITHUB_ISSUES_URL,
   );
   const [passiveTreeData, setPassiveTreeData] = useStoredValue<PassiveTreeDataset | null>(STORAGE.passiveTreeData, null);
+  const [savedAtlasTrees, setSavedAtlasTrees] = useStoredValue<SavedAtlasTree[]>(STORAGE.atlasTrees, []);
+  const [atlasTreeDataset, setAtlasTreeDataset] = useStoredValue<AtlasTreeDataset | null>(STORAGE.atlasTreeData, null);
   const [sessionBuilds, setSessionBuilds] = useState<BuildManifest[]>([]);
   const [roleTab, setRoleTab] = useState<BuildRole>("ACTIVE");
   const [selectedBuildId, setSelectedBuildId] = useState("");
@@ -489,6 +497,29 @@ export default function App() {
     } catch (error) {
       notify(error instanceof Error ? error.message : "The passive-tree export could not be imported.");
     }
+  }
+
+  function saveAtlasTree(imported: AtlasTreeImport, name: string) {
+    if (!selectedLeague) return;
+    const importedAt = new Date().toISOString();
+    const id = `atlas-${crypto.randomUUID()}`;
+    setSavedAtlasTrees((previous) => {
+      const existing = previous.find((tree) => tree.leagueId === selectedLeague.id && tree.sourceUrl === imported.sourceUrl);
+      return [
+        ...previous.filter((tree) => !(tree.leagueId === selectedLeague.id && tree.sourceUrl === imported.sourceUrl)),
+        {
+          ...imported,
+          id: existing?.id ?? id,
+          leagueId: selectedLeague.id,
+          name,
+          importedAt,
+        },
+      ];
+    });
+  }
+
+  function removeAtlasTree(treeId: string) {
+    setSavedAtlasTrees((previous) => previous.filter((tree) => tree.id !== treeId));
   }
 
   async function openPassiveTreeDataFile() {
@@ -1280,10 +1311,34 @@ export default function App() {
         </section>
         <section className="local-data-section">
           <div><Settings2 size={18} /><strong>Local profile data</strong></div>
-          <p>{leagues.length} league{leagues.length === 1 ? "" : "s"} · {characters.length} character{characters.length === 1 ? "" : "s"} · {savedBuilds.length} saved build{savedBuilds.length === 1 ? "" : "s"}</p>
+          <p>{leagues.length} league{leagues.length === 1 ? "" : "s"} · {characters.length} character{characters.length === 1 ? "" : "s"} · {savedBuilds.length} build{savedBuilds.length === 1 ? "" : "s"} · {savedAtlasTrees.length} Atlas tree{savedAtlasTrees.length === 1 ? "" : "s"}</p>
           <span>Stored in this app's local data folder. No sign-in is required to use build import or priority analysis.</span>
         </section>
         <p className="notice-text">This product isn't affiliated with or endorsed by Grinding Gear Games in any way.</p>
+      </div>
+    );
+  }
+
+  function renderAtlasTreesPage() {
+    const leagueTrees = selectedLeagueId
+      ? savedAtlasTrees.filter((tree) => tree.leagueId === selectedLeagueId)
+      : [];
+    return (
+      <div className="secondary-page atlas-page">
+        <header className="page-intro">
+          <h1>Atlas trees</h1>
+          <p>Keep target-farm Atlas setups with their league. Import public GGG share links now; official account snapshots can be connected when OAuth registration is available.</p>
+        </header>
+        {renderContextControls()}
+        <AtlasTreesPage
+          league={selectedLeague}
+          trees={leagueTrees}
+          dataset={atlasTreeDataset}
+          onImport={saveAtlasTree}
+          onLoadDataset={setAtlasTreeDataset}
+          onRemove={removeAtlasTree}
+          onOpenShare={(url) => void openTrustedLink(url)}
+        />
       </div>
     );
   }
@@ -1292,6 +1347,7 @@ export default function App() {
     if (page === "Loot filter") return renderPriorityWorkspace();
     if (page === "Builds") return renderBuildsPage();
     if (page === "Progression route") return renderProgressionRoutePage();
+    if (page === "Atlas trees") return renderAtlasTreesPage();
     if (page === "Account") return renderAccountPage();
     return renderOverviewPage();
   }
@@ -1304,7 +1360,7 @@ export default function App() {
           <span>SSF Companion</span>
         </div>
         <nav className="side-nav" aria-label="Main navigation">
-          {(["Overview", "Builds", "Progression route", "Loot filter", "Account"] as Page[]).map((item) => {
+          {(["Overview", "Builds", "Progression route", "Atlas trees", "Loot filter", "Account"] as Page[]).map((item) => {
             const Icon = PAGE_ICONS[item];
             return (
               <button type="button" key={item} className={page === item ? "nav-item is-active" : "nav-item"} aria-current={page === item ? "page" : undefined} onClick={() => setPage(item)}>

@@ -4,6 +4,7 @@ This project follows a simple release history. Changes are grouped by version; G
 
 ## Unreleased
 
+- Import official PoE 1 Atlas Skill Tree share URLs, keep them with their selected league, and save/re-import local JSON snapshots; optionally load a player-selected GGG Atlas export to show node labels with a patch-version caveat.
 - Keep Windows portable builds unsigned while preserving the SSF Companion product name and version metadata.
 - Add a read-only local audit for exported PoE filters, showing candidate build-target BaseType mentions and existing NeverSink/FilterBlade rule styling without changing or uploading the selected file.
 - Add an optional combined Markdown handoff that places current audit references and existing style directives alongside build-aware priority recommendations.

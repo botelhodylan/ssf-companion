@@ -8,6 +8,7 @@ This is an early, source-available build. The initial distribution target is a p
 
 - Import a Path of Building code or supported `pobb.in` / Maxroll PoB share link.
 - Keep builds under a local league and character, with `ACTIVE`, `NEXT`, and `INTERESTED` roles.
+- Import standard or Ruthless Atlas Skill Tree share URLs from GGG, save/re-import local JSON snapshots under the selected league, and optionally load GGG's local Atlas export to display matching node names/stats. The export has no patch label, so the app does not claim those facts are current or recommend farm trees yet.
 - Produce deterministic item-priority recommendations with a “Why am I seeing this?” explanation.
 - Preserve all named passive-tree specs, node IDs, and tree versions from imported PoB builds. Optionally load a local GGG tree JSON export to label nodes and create a deterministic graph traversal from the class start or same-version retained allocations; no GGG tree data is bundled. This order is not a PoB-authored or optimized leveling guide.
 - Show a deterministic progression-route foundation for gear, crafting, farming/Atlas, passive trees, and loot priorities. Each step includes evidence, rule version, confidence, and explicit player/game-data gaps.
@@ -61,7 +62,7 @@ See [Contributing](CONTRIBUTING.md) for development and data-handling rules, and
 
 Use [GitHub Issues](https://github.com/botelhodylan/ssf-companion/issues) for bug reports, feature requests, and general project contact. Use GitHub's private vulnerability reporting for security issues; do not post PoB codes or private account/stash data in an issue.
 
-The current route is a planning scaffold: it organizes imported goals and shows what additional character/stash data and reviewed PoE data are required. Matching local tree data can name passive allocation differences and suggest an explicit graph traversal, but it does not optimize allocations or provide a PoB-authored leveling guide. It does not yet provide a patch-current craft recipe database, named drop routes, Atlas-tree plans, or a generated game-ready loot filter.
+The current route is a planning scaffold: it organizes imported goals and shows what additional character/stash data and reviewed PoE data are required. Matching local tree data can name passive allocation differences and suggest an explicit graph traversal, but it does not optimize allocations or provide a PoB-authored leveling guide. Local Atlas data can label hashes in a saved share setup, but the export has no patch version and the app does not yet provide Atlas-tree plans, a patch-current craft recipe database, named drop routes, or a generated game-ready loot filter.
 
 ## Notice
 
