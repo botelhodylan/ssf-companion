@@ -4,6 +4,8 @@ This project follows a simple release history. Changes are grouped by version; G
 
 ## Unreleased
 
+- Keep bundled example builds out of a player profile after they create a league or character, or import a build.
+
 ## 0.2.0 Preview
 
 - Create a local current-character snapshot from an explicitly ACTIVE PoB after league selection, with a reviewed name/class/level/stage and a linked copy of its imported gear, skills, and passive specs.

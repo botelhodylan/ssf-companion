@@ -29,6 +29,7 @@ import { parsePassiveTreeExport, type PassiveTreeDataset } from "./core/passive-
 import type { AtlasTreeDataset, AtlasTreeImport, SavedAtlasTree } from "./core/atlas-tree-import";
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
 import { rankItemsByRelevance } from "./core/relevance";
+import { shouldShowSampleBuilds } from "./core/sample-mode";
 import { AccountSyncStrip } from "./components/AccountSyncStrip";
 import { AtlasTreesPage } from "./components/AtlasTreesPage";
 import { ExplanationPanel } from "./components/ExplanationPanel";
@@ -279,7 +280,12 @@ export default function App() {
     ...savedForCharacter.map((record) => record.manifest),
     ...sessionBuilds.filter((build) => !savedForCharacter.some((record) => record.manifest.id === build.id)),
   ];
-  const sampleMode = !selectedCharacter && sessionBuilds.length === 0 && savedBuilds.length === 0;
+  const sampleMode = shouldShowSampleBuilds({
+    hasLeagues: leagues.length > 0,
+    hasCharacters: characters.length > 0,
+    hasSavedBuilds: savedBuilds.length > 0,
+    hasSessionBuilds: sessionBuilds.length > 0,
+  });
   const visibleBuilds = sampleMode ? [...SAMPLE_BUILD_SET] : sessionAndSavedBuilds;
   const activePobBuild = visibleBuilds.find((build) => build.role === "ACTIVE" && isPobBuildSource(build.source.kind));
   const passiveTreeVersionOptions = [...new Set(visibleBuilds.flatMap((build) =>
