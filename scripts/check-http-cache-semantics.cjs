@@ -3,9 +3,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const virtualStore = path.join(process.cwd(), "node_modules", ".pnpm");
-const candidates = fs.readdirSync(virtualStore, { withFileTypes: true })
+const candidates = [
+  path.join(process.cwd(), "node_modules", "http-cache-semantics"),
+  ...(fs.existsSync(virtualStore) ? fs.readdirSync(virtualStore, { withFileTypes: true }) : [])
   .filter((entry) => entry.isDirectory() && entry.name.startsWith("http-cache-semantics@4.3.0"))
-  .map((entry) => path.join(virtualStore, entry.name, "node_modules", "http-cache-semantics"))
+  .map((entry) => path.join(virtualStore, entry.name, "node_modules", "http-cache-semantics")),
+]
   .filter((directory) => fs.existsSync(path.join(directory, "index.js")));
 const patchedDirectory = candidates.find((directory) =>
   fs.readFileSync(path.join(directory, "index.js"), "utf8").includes("staleReuseForbidden"),
