@@ -1,6 +1,6 @@
 import { poe1Provider } from "./game-provider";
 import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeDataset } from "./passive-tree-data";
-import { acquisitionRoutesForGoal, craftPlanForGoal, type Poe1RouteKnowledgePack, type Poe1RouteKnowledgePlan } from "./poe1-route-pack";
+import { acquisitionRoutesForGoal, craftPlanForGoal, mechanicPlanById, type Poe1RouteKnowledgePack, type Poe1RouteKnowledgePlan } from "./poe1-route-pack";
 import type { BuildManifest, BuildRole, BuildSkillGroup, EquipmentItemDetailFacts, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
 
 export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.6.0" as const;
@@ -416,6 +416,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
 
   const acquisitionSteps: Omit<ProgressionRouteStep, "order">[] = gearGoals.flatMap((goal) =>
     acquisitionRoutesForGoal(goal, routeKnowledgePack).map((route) => {
+      const mechanicPlan = mechanicPlanById(route.mechanicPlanId, routeKnowledgePack);
       const requiredData: RouteDataRequirement[] = progression.stage === "unknown" ? [{
         category: "personal",
         key: "current_progression_stage",
@@ -427,14 +428,26 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
         steps: route.steps,
         ...(route.atlasTreeName ? { atlasTreeName: route.atlasTreeName } : {}),
         ...(route.atlasNodeNames ? { atlasNodeNames: route.atlasNodeNames } : {}),
-        ...(route.atlasShareUrl ? { atlasShareUrl: route.atlasShareUrl } : {}),
+        ...(route.atlasShareUrl || mechanicPlan?.atlasShareUrl ? { atlasShareUrl: route.atlasShareUrl ?? mechanicPlan?.atlasShareUrl } : {}),
+        ...(!route.atlasTreeName && mechanicPlan?.atlasTreeName ? { atlasTreeName: mechanicPlan.atlasTreeName } : {}),
+        ...(!route.atlasNodeNames && mechanicPlan?.atlasNodeNames ? { atlasNodeNames: mechanicPlan.atlasNodeNames } : {}),
+        ...(mechanicPlan ? { mechanicPlaybook: {
+          mechanicId: mechanicPlan.mechanicId,
+          name: mechanicPlan.name,
+          objective: mechanicPlan.objective,
+          prerequisites: mechanicPlan.prerequisites,
+          setupSteps: mechanicPlan.setupSteps,
+          executionSteps: mechanicPlan.executionSteps,
+          decisionRules: mechanicPlan.decisionRules,
+          stopCondition: mechanicPlan.stopCondition,
+        } } : {}),
       };
       return {
         id: `farming-atlas:${goal.id}:${route.id}`,
         kind: "farming_atlas" as const,
         status: requiredData.length ? "needs_personal_data" as const : "ready" as const,
         title: `Target ${route.method.replaceAll("_", " ")}: ${route.title}`,
-        action: `Use this ${route.stage} route for ${goalLabel(goal)}. The method and steps come from a local ${routeKnowledgePack?.contentVersion} pack; review the source before planning around it.`,
+        action: `Use this ${route.method.replaceAll("_", " ")} route for ${goalLabel(goal)}. The method and steps come from a local ${routeKnowledgePack?.contentVersion} pack; review the source before planning around it.${mechanicPlan ? ` Follow the ${mechanicPlan.name} playbook and its decision rules.` : ""}`,
         confidence: "low" as const,
         dataVersion,
         evidence: [
@@ -442,6 +455,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
           buildEvidence(`Goal ${goal.id}: ${goal.why ?? goalLabel(goal)} (priority ${goal.priority}).`, goal),
           progressionEvidence,
           ...packEvidence(route.sourceIds, route.id),
+          ...(mechanicPlan ? packEvidence(mechanicPlan.sourceIds, mechanicPlan.id) : []),
         ],
         requiredData,
         goalId: goal.id,

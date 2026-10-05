@@ -56,7 +56,7 @@ After GGG registration is available, account sync uses only documented OAuth res
 - Explainability panel and exportable JSON/CSV priority plan.
 - Windows portable `.exe` packaging.
 
-This slice is a foundation for the full route planner, not yet a complete end-to-end progression guide. It can import a PoB build, preserve its saved passive specs, rank known item goals, and explain why. It now accepts an optional local, patch-versioned knowledge pack for exact item/base acquisition and craft plans, with required HTTPS citations and validated GGG Atlas share links. The importer does not verify source facts, and no gameplay pack is bundled; complete farm routes, recipes, or new skill-tree paths remain unavailable until data has been curated and reviewed. See the [route pack format](route-knowledge-packs.md).
+This slice is a foundation for the full route planner, not yet a complete end-to-end progression guide. It can import a PoB build, preserve its saved passive specs, rank known item goals, and explain why. It now accepts an optional local, patch-versioned knowledge pack for exact item/base acquisition routes, craft plans, and linked mechanic playbooks with required HTTPS citations and validated GGG Atlas share links. The importer does not verify source facts, and no gameplay pack is bundled; complete farm routes, recipes, mechanic strategies, or new skill-tree paths remain unavailable until data has been curated and reviewed. See the [route pack format](route-knowledge-packs.md).
 
 ### V1 completion target: build-aware SSF route
 

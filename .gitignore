@@ -7,6 +7,8 @@ release-*/
 !.env.example
 .DS_Store
 coverage/
+playwright-report/
+test-results/
 *.pfx
 *.p12
 *.snk

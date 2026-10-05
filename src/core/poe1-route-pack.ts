@@ -22,6 +22,8 @@ export interface Poe1AcquisitionRoute {
   readonly atlasTreeName?: string;
   readonly atlasNodeNames?: readonly string[];
   readonly atlasShareUrl?: string;
+  /** Optional detailed operating playbook for a league-mechanic route. */
+  readonly mechanicPlanId?: string;
   readonly sourceIds: readonly string[];
 }
 
@@ -42,6 +44,28 @@ export interface Poe1CraftPlan {
   readonly sourceIds: readonly string[];
 }
 
+export interface Poe1MechanicPlan {
+  readonly id: string;
+  /** Stable slug such as `betrayal`, `bestiary`, or `kingsmarch`. */
+  readonly mechanicId: string;
+  readonly name: string;
+  readonly match: {
+    readonly itemNames?: readonly string[];
+    readonly baseTypes?: readonly string[];
+  };
+  readonly stage: ProgressionStage;
+  readonly objective: string;
+  readonly prerequisites: readonly string[];
+  readonly setupSteps: readonly string[];
+  readonly executionSteps: readonly string[];
+  readonly decisionRules: readonly { readonly when: string; readonly do: string }[];
+  readonly stopCondition: string;
+  readonly atlasTreeName?: string;
+  readonly atlasNodeNames?: readonly string[];
+  readonly atlasShareUrl?: string;
+  readonly sourceIds: readonly string[];
+}
+
 /** Player-selected, patch-versioned local knowledge; no pack is bundled by default. */
 export interface Poe1RouteKnowledgePack {
   readonly schemaVersion: 1;
@@ -52,6 +76,7 @@ export interface Poe1RouteKnowledgePack {
   readonly sources: readonly Poe1RoutePackSource[];
   readonly acquisitionRoutes: readonly Poe1AcquisitionRoute[];
   readonly craftPlans: readonly Poe1CraftPlan[];
+  readonly mechanicPlans: readonly Poe1MechanicPlan[];
 }
 
 export interface Poe1RouteKnowledgePlan {
@@ -70,6 +95,9 @@ export interface Poe1RouteKnowledgePlan {
   readonly atlasNodeNames?: readonly string[];
   readonly atlasShareUrl?: string;
   readonly stopCondition?: string;
+  readonly mechanicPlaybook?: Pick<Poe1MechanicPlan,
+    "mechanicId" | "name" | "objective" | "prerequisites" | "setupSteps" | "executionSteps" | "decisionRules" | "stopCondition"
+  >;
 }
 
 const VALID_STAGES = new Set<ProgressionStage>(["campaign", "early_mapping", "atlas", "endgame"]);
@@ -160,8 +188,8 @@ export function parsePoe1RouteKnowledgePack(raw: string): Poe1RouteKnowledgePack
   if (!/^[a-z0-9][a-z0-9._-]{0,79}$/i.test(id)) throw new Error("id must use letters, numbers, dot, underscore, or hyphen.");
   const name = boundedText(input.name, "name", 160);
   const contentVersion = boundedText(input.contentVersion, "contentVersion", 40);
-  if (!/^\d+\.\d+(?:\.\d+)?(?:[-+][a-z0-9.-]+)?$/i.test(contentVersion)) {
-    throw new Error("contentVersion must identify a PoE patch, such as 3.28 or 3.28.1.");
+  if (!/^\d+\.\d+(?:\.\d+)?(?:[a-z]\d*)?(?:[-+][a-z0-9.-]+)?$/i.test(contentVersion)) {
+    throw new Error("contentVersion must identify a PoE patch, such as 3.28, 3.28.1, or 3.29.3b.");
   }
 
   if (!Array.isArray(input.sources) || input.sources.length === 0 || input.sources.length > MAX_SOURCES) {
@@ -183,9 +211,11 @@ export function parsePoe1RouteKnowledgePack(raw: string): Poe1RouteKnowledgePack
   const sourceIds = new Set(sources.map((source) => source.id));
   if (sourceIds.size !== sources.length) throw new Error("sources contains duplicate IDs.");
 
+  const mechanicPlans = parseMechanicPlans(input.mechanicPlans, sourceIds);
   const acquisitionRoutes = parseAcquisitionRoutes(input.acquisitionRoutes, sourceIds);
+  validateMechanicPlanReferences(acquisitionRoutes, mechanicPlans);
   const craftPlans = parseCraftPlans(input.craftPlans, sourceIds);
-  return { schemaVersion: 1, game: "poe1", id, name, contentVersion, sources, acquisitionRoutes, craftPlans };
+  return { schemaVersion: 1, game: "poe1", id, name, contentVersion, sources, acquisitionRoutes, craftPlans, mechanicPlans };
 }
 
 function parseAcquisitionRoutes(value: unknown, knownSources: ReadonlySet<string>): readonly Poe1AcquisitionRoute[] {
@@ -217,9 +247,82 @@ function parseAcquisitionRoutes(value: unknown, knownSources: ReadonlySet<string
       ...(input.atlasTreeName === undefined ? {} : { atlasTreeName: boundedText(input.atlasTreeName, `acquisitionRoutes[${index}].atlasTreeName`, 160) }),
       ...(atlasNodeNames.length ? { atlasNodeNames } : {}),
       ...(atlasShareUrl ? { atlasShareUrl } : {}),
+      ...(input.mechanicPlanId === undefined ? {} : { mechanicPlanId: boundedText(input.mechanicPlanId, `acquisitionRoutes[${index}].mechanicPlanId`, 80) }),
       sourceIds: sourceIds(input.sourceIds, `acquisitionRoutes[${index}].sourceIds`, knownSources),
     };
   });
+}
+
+function parseMechanicPlans(value: unknown, knownSources: ReadonlySet<string>): readonly Poe1MechanicPlan[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_RECORDS) throw new Error(`mechanicPlans must be a list with at most ${MAX_RECORDS} entries.`);
+  const ids = new Set<string>();
+  return value.map((entry, index) => {
+    const input = record(entry, `mechanicPlans[${index}]`);
+    const id = boundedText(input.id, `mechanicPlans[${index}].id`, 80);
+    const mechanicId = boundedText(input.mechanicId, `mechanicPlans[${index}].mechanicId`, 80);
+    if (!/^[a-z0-9][a-z0-9._-]{0,79}$/i.test(id) || ids.has(id)) throw new Error(`mechanicPlans[${index}].id is invalid or duplicated.`);
+    if (!/^[a-z0-9][a-z0-9._-]{0,79}$/i.test(mechanicId)) throw new Error(`mechanicPlans[${index}].mechanicId is invalid.`);
+    ids.add(id);
+    const atlasNodeNames = input.atlasNodeNames === undefined ? [] : textList(input.atlasNodeNames, `mechanicPlans[${index}].atlasNodeNames`, 60);
+    const atlasShareUrl = input.atlasShareUrl === undefined
+      ? undefined
+      : parseAtlasTreeShareUrl(boundedText(input.atlasShareUrl, `mechanicPlans[${index}].atlasShareUrl`, 16_000)).sourceUrl;
+    if ((input.atlasTreeName !== undefined || atlasNodeNames.length > 0) && !atlasShareUrl) {
+      throw new Error(`mechanicPlans[${index}] must include a validated GGG Atlas share URL when naming an Atlas setup.`);
+    }
+    if (!Array.isArray(input.decisionRules) || input.decisionRules.length > MAX_STEPS) {
+      throw new Error(`mechanicPlans[${index}].decisionRules must be a list with at most ${MAX_STEPS} entries.`);
+    }
+    const decisionRules = input.decisionRules.map((rawRule, ruleIndex) => {
+      const rule = record(rawRule, `mechanicPlans[${index}].decisionRules[${ruleIndex}]`);
+      return {
+        when: boundedText(rule.when, `mechanicPlans[${index}].decisionRules[${ruleIndex}].when`, 1_000),
+        do: boundedText(rule.do, `mechanicPlans[${index}].decisionRules[${ruleIndex}].do`, 1_000),
+      };
+    });
+    return {
+      id,
+      mechanicId,
+      name: boundedText(input.name, `mechanicPlans[${index}].name`, 160),
+      match: exactMatch(input.match, `mechanicPlans[${index}].match`),
+      stage: stage(input.stage, `mechanicPlans[${index}].stage`),
+      objective: boundedText(input.objective, `mechanicPlans[${index}].objective`, 1_000),
+      prerequisites: textList(input.prerequisites, `mechanicPlans[${index}].prerequisites`, MAX_STEPS),
+      setupSteps: textList(input.setupSteps, `mechanicPlans[${index}].setupSteps`, MAX_STEPS),
+      executionSteps: textList(input.executionSteps, `mechanicPlans[${index}].executionSteps`, MAX_STEPS),
+      decisionRules,
+      stopCondition: boundedText(input.stopCondition, `mechanicPlans[${index}].stopCondition`, 1_000),
+      ...(input.atlasTreeName === undefined ? {} : { atlasTreeName: boundedText(input.atlasTreeName, `mechanicPlans[${index}].atlasTreeName`, 160) }),
+      ...(atlasNodeNames.length ? { atlasNodeNames } : {}),
+      ...(atlasShareUrl ? { atlasShareUrl } : {}),
+      sourceIds: sourceIds(input.sourceIds, `mechanicPlans[${index}].sourceIds`, knownSources),
+    };
+  });
+}
+
+function validateMechanicPlanReferences(
+  routes: readonly Poe1AcquisitionRoute[],
+  plans: readonly Poe1MechanicPlan[],
+): void {
+  const plansById = new Map(plans.map((plan) => [plan.id, plan]));
+  for (const route of routes) {
+    if (!route.mechanicPlanId) continue;
+    if (route.method !== "league_mechanic") throw new Error(`acquisitionRoutes[${route.id}] can reference a mechanic plan only when method is league_mechanic.`);
+    const plan = plansById.get(route.mechanicPlanId);
+    if (!plan) throw new Error(`acquisitionRoutes[${route.id}] references a mechanic plan that is not declared in mechanicPlans.`);
+    if (plan.stage !== route.stage) throw new Error(`acquisitionRoutes[${route.id}] and mechanicPlans[${plan.id}] must use the same progression stage.`);
+    if (!matchesIntersect(route.match, plan.match)) throw new Error(`acquisitionRoutes[${route.id}] and mechanicPlans[${plan.id}] must share an exact item or base target.`);
+  }
+}
+
+function matchesIntersect(
+  left: Poe1AcquisitionRoute["match"],
+  right: Poe1AcquisitionRoute["match"],
+): boolean {
+  const leftTargets = new Set([...(left.itemNames ?? []), ...(left.baseTypes ?? [])].map(poe1Provider.normalizeItemIdentity));
+  return [...(right.itemNames ?? []), ...(right.baseTypes ?? [])]
+    .some((target) => leftTargets.has(poe1Provider.normalizeItemIdentity(target)));
 }
 
 function parseCraftPlans(value: unknown, knownSources: ReadonlySet<string>): readonly Poe1CraftPlan[] {
@@ -283,4 +386,9 @@ export function acquisitionRoutesForGoal(goal: ItemGoal, pack?: Poe1RouteKnowled
 export function craftPlanForGoal(goal: ItemGoal, pack?: Poe1RouteKnowledgePack | null): Poe1CraftPlan | undefined {
   if (!pack || (goal.match.itemNames?.length ?? 0) + (goal.match.baseTypes?.length ?? 0) === 0) return undefined;
   return pack.craftPlans.find((plan) => exactRouteMatch(goal, plan.match));
+}
+
+export function mechanicPlanById(id: string | undefined, pack?: Poe1RouteKnowledgePack | null): Poe1MechanicPlan | undefined {
+  if (!id || !pack) return undefined;
+  return pack.mechanicPlans.find((plan) => plan.id === id);
 }

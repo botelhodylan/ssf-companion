@@ -6,6 +6,8 @@ This project follows a simple release history. Changes are grouped by version; G
 
 - Keep bundled example builds out of a player profile after they create a league or character, or import a build.
 - Add a local, patch-versioned PoE 1 route pack importer for exact-match acquisition routes, Atlas share setups, and sourced step-by-step craft plans.
+- Support source-cited league-mechanic playbooks linked to exact acquisition routes, with setup steps, encounter loops, decision rules, and stop conditions.
+- Add Playwright checks for Electron startup, its preload bridge, and route-pack/playbook inspection in Chromium; accept lettered PoE hotfix versions and show playbook prerequisites and stop conditions.
 
 ## 0.2.0 Preview
 

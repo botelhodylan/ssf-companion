@@ -219,6 +219,63 @@ describe("buildProgressionRoute", () => {
     expect(route.steps.find((step) => step.kind === "farming_atlas" && !step.goalId)?.action).toContain("Torturer's Mask");
   });
 
+  it("attaches the cited mechanic playbook to its exact farm route and explains the mechanic loop", () => {
+    const pack = parsePoe1RouteKnowledgePack(JSON.stringify({
+      schemaVersion: 1,
+      game: "poe1",
+      id: "mechanic-pack-test",
+      name: "Test mechanic pack",
+      contentVersion: "3.29.3",
+      sources: [{ id: "wiki", title: "Mechanic reference", url: "https://example.org/mechanic", checkedOn: "2026-10-05" }],
+      acquisitionRoutes: [{
+        id: "taming-betrayal-route",
+        match: { itemNames: ["The Taming"] },
+        stage: "atlas",
+        method: "league_mechanic",
+        title: "Pursue the target through Betrayal",
+        steps: ["Use the cited SSF acquisition route."],
+        mechanicPlanId: "betrayal-taming-playbook",
+        sourceIds: ["wiki"],
+      }],
+      craftPlans: [],
+      mechanicPlans: [{
+        id: "betrayal-taming-playbook",
+        mechanicId: "betrayal",
+        name: "Betrayal target plan",
+        match: { itemNames: ["the-taming"] },
+        stage: "atlas",
+        objective: "Pursue the exact gear goal with the cited reward strategy.",
+        prerequisites: ["Reach Atlas progression."],
+        setupSteps: ["Review the current reward state."],
+        executionSteps: ["Complete the selected encounter loop."],
+        decisionRules: [{ when: "The target output is not available.", do: "Use the cited fallback mechanic." }],
+        stopCondition: "Stop when the target is acquired or the source conditions no longer apply.",
+        sourceIds: ["wiki"],
+      }],
+    }));
+    const route = buildProgressionRoute({ build: BUILD, progression: PROGRESSION, stash: STASH, routeKnowledgePack: pack });
+    const farm = route.steps.find((step) => step.goalId === "goal-ring" && step.kind === "farming_atlas");
+
+    expect(farm).toMatchObject({
+      kind: "farming_atlas",
+      action: expect.stringContaining("Betrayal target plan playbook"),
+      knowledgePlan: {
+        mechanicPlaybook: {
+          mechanicId: "betrayal",
+          objective: "Pursue the exact gear goal with the cited reward strategy.",
+          setupSteps: ["Review the current reward state."],
+          executionSteps: ["Complete the selected encounter loop."],
+          decisionRules: [{ when: "The target output is not available.", do: "Use the cited fallback mechanic." }],
+          stopCondition: "Stop when the target is acquired or the source conditions no longer apply.",
+        },
+      },
+    });
+    expect(farm?.evidence).toContainEqual(expect.objectContaining({
+      source: "route_knowledge_pack",
+      reference: "betrayal-taming-playbook/wiki",
+    }));
+  });
+
   it("compares saved target PoB specs with the ACTIVE tree only when versions match", () => {
     const currentBuild: BuildManifest = {
       ...BUILD,

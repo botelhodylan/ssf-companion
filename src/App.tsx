@@ -1364,19 +1364,19 @@ export default function App() {
               <div className="route-tree-data-copy">
                 <span className="section-kicker">PATCH-VERSIONED CONTENT</span>
                 <strong>Import a PoE 1 route knowledge pack</strong>
-                <p>Exact item and base matches can provide cited farm routes, Atlas node names, and step-by-step crafts. Packs stay local; review their patch and source links before acting.</p>
+                <p>Exact item and base matches can provide cited farm routes, Atlas node names, step-by-step crafts, and mechanic playbooks. Packs stay local; review their patch and source links before acting.</p>
               </div>
               <div className="route-tree-data-controls">
                 <button className="button button-outline" type="button" onClick={() => routeKnowledgePackFileInputRef.current?.click()}>Import route data</button>
                 {routeKnowledgePack && (
                   <div className="route-tree-data-status" role="status">
-                    <span>{routeKnowledgePack.name} · PoE {routeKnowledgePack.contentVersion} · {routeKnowledgePack.acquisitionRoutes.length} acquisition routes · {routeKnowledgePack.craftPlans.length} craft plans · {routeKnowledgePack.sources.length} sources</span>
+                    <span>{routeKnowledgePack.name} · PoE {routeKnowledgePack.contentVersion} · {routeKnowledgePack.acquisitionRoutes.length} acquisition route{routeKnowledgePack.acquisitionRoutes.length === 1 ? "" : "s"} · {routeKnowledgePack.craftPlans.length} craft plan{routeKnowledgePack.craftPlans.length === 1 ? "" : "s"} · {routeKnowledgePack.mechanicPlans.length} mechanic playbook{routeKnowledgePack.mechanicPlans.length === 1 ? "" : "s"} · {routeKnowledgePack.sources.length} source{routeKnowledgePack.sources.length === 1 ? "" : "s"}</span>
                     <button className="text-link" type="button" onClick={() => setRouteKnowledgePack(null)}>Clear</button>
                   </div>
                 )}
               </div>
-              <input ref={routeKnowledgePackFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserRouteKnowledgePackChosen(event)} />
-              <p className="route-tree-data-note">No farming or crafting data is bundled until its patch and reuse terms can be verified. Routes are generated only from exact item/base matches and retain their source links.</p>
+              <input data-testid="route-pack-input" ref={routeKnowledgePackFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserRouteKnowledgePackChosen(event)} />
+              <p className="route-tree-data-note">No farming, crafting, or mechanic playbooks are bundled until their patch and reuse terms can be verified. Routes are generated only from exact item/base matches and retain their source links.</p>
             </section>
 
             <div className="route-layout">
@@ -1531,6 +1531,25 @@ export default function App() {
                         {selectedRouteStep.knowledgePlan.prerequisites?.length ? <div><b>Prerequisites</b><ul>{selectedRouteStep.knowledgePlan.prerequisites.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></div> : null}
                         {selectedRouteStep.knowledgePlan.materials?.length ? <div><b>Materials</b><ul>{selectedRouteStep.knowledgePlan.materials.map((item) => <li key={item.name}>{item.name} × {item.quantity}{item.ownedQuantity !== undefined ? ` · owned ${item.ownedQuantity} · need ${Math.max(0, item.quantity - item.ownedQuantity)} more` : " · stash quantity unknown"}</li>)}</ul></div> : null}
                         {selectedRouteStep.knowledgePlan.steps.length ? <div><b>Steps</b><ol>{selectedRouteStep.knowledgePlan.steps.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ol></div> : null}
+                        {selectedRouteStep.knowledgePlan.mechanicPlaybook && (
+                          <div className="route-mechanic-playbook">
+                            <b>{selectedRouteStep.knowledgePlan.mechanicPlaybook.name} playbook</b>
+                            <p>{selectedRouteStep.knowledgePlan.mechanicPlaybook.objective}</p>
+                            {selectedRouteStep.knowledgePlan.mechanicPlaybook.prerequisites.length > 0 && (
+                              <div><b>Prerequisites</b><ul>{selectedRouteStep.knowledgePlan.mechanicPlaybook.prerequisites.map((item, index) => <li key={`prerequisite-${index}`}>{item}</li>)}</ul></div>
+                            )}
+                            {selectedRouteStep.knowledgePlan.mechanicPlaybook.setupSteps.length > 0 && (
+                              <div><b>Setup</b><ol>{selectedRouteStep.knowledgePlan.mechanicPlaybook.setupSteps.map((item, index) => <li key={`setup-${index}`}>{item}</li>)}</ol></div>
+                            )}
+                            {selectedRouteStep.knowledgePlan.mechanicPlaybook.executionSteps.length > 0 && (
+                              <div><b>Run loop</b><ol>{selectedRouteStep.knowledgePlan.mechanicPlaybook.executionSteps.map((item, index) => <li key={`execution-${index}`}>{item}</li>)}</ol></div>
+                            )}
+                            {selectedRouteStep.knowledgePlan.mechanicPlaybook.decisionRules.length > 0 && (
+                              <div><b>Decision rules</b><ul>{selectedRouteStep.knowledgePlan.mechanicPlaybook.decisionRules.map((rule, index) => <li key={`decision-${index}`}><strong>When:</strong> {rule.when} <strong>Do:</strong> {rule.do}</li>)}</ul></div>
+                            )}
+                            <p><b>Stop condition:</b> {selectedRouteStep.knowledgePlan.mechanicPlaybook.stopCondition}</p>
+                          </div>
+                        )}
                         {selectedRouteStep.knowledgePlan.stopCondition && <p><b>Stop condition:</b> {selectedRouteStep.knowledgePlan.stopCondition}</p>}
                       </div>
                     )}
