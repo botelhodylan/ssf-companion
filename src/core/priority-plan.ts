@@ -114,8 +114,15 @@ function serializeFilterBladeHandoff(plan: PriorityPlan, filterAudit?: FilterBla
     ...(filterAudit ? serializeFilterAudit(filterAudit) : []),
     "## Targets",
     "",
-    "| Target / base type | SSF priority | Score | Matched builds | Why |",
-    "| --- | --- | ---: | --- | --- |",
+    ...(filterAudit ? [
+      "FilterBlade clues below are candidate BaseType references from the selected file, not proof that those rules apply. Review the detailed conditions and existing presentation in the audit section.",
+      "",
+      "| Target / base type | SSF priority | Score | Matched builds | FilterBlade candidate rules | Why |",
+      "| --- | --- | ---: | --- | --- | --- |",
+    ] : [
+      "| Target / base type | SSF priority | Score | Matched builds | Why |",
+      "| --- | --- | ---: | --- | --- |",
+    ]),
     ...plan.priorities.map((priority) => {
       const target = priority.baseType && priority.baseType !== priority.item
         ? `${priority.item} (${priority.baseType})`
@@ -127,7 +134,15 @@ function serializeFilterBladeHandoff(plan: PriorityPlan, filterAudit?: FilterBla
           : "Lower priority (no hide instruction)";
       const builds = priority.matchedBuilds.map((build) => `${build.role}: ${build.name}`).join("; ") || "None";
       const reasons = priority.reasons.map((reason) => reason.text).join(" ") || "No explanation recorded.";
-      return `| ${markdownCell(target)} | ${action} | ${priority.score} | ${markdownCell(builds)} | ${markdownCell(reasons)} |`;
+      const columns = [
+        markdownCell(target),
+        action,
+        String(priority.score),
+        markdownCell(builds),
+      ];
+      if (filterAudit) columns.push(filterAuditCandidateSummary(priority, filterAudit));
+      columns.push(markdownCell(reasons));
+      return `| ${columns.join(" | ")} |`;
     }),
     "",
     "## Limits",
@@ -136,6 +151,29 @@ function serializeFilterBladeHandoff(plan: PriorityPlan, filterAudit?: FilterBla
     "",
   ];
   return lines.join("\n");
+}
+
+function filterAuditCandidateSummary(
+  priority: PriorityPlan["priorities"][number],
+  audit: FilterBladeAudit,
+): string {
+  const normalize = (value: string) => value.normalize("NFKC").trim().toLocaleLowerCase("en-US");
+  const item = normalize(priority.item);
+  const baseType = priority.baseType ? normalize(priority.baseType) : null;
+  const target = audit.targets.find((entry) =>
+    normalize(entry.item) === item && (!baseType || (entry.baseType && normalize(entry.baseType) === baseType)),
+  );
+  if (!target) return "No matching audit target";
+  if (target.status === "base_unknown") return "Base type unknown";
+  if (target.status === "no_reference") return "No literal BaseType reference found";
+
+  const summaries = target.rules.slice(0, 3).map((rule) => {
+    const id = rule.filterBladeRuleId ? ` (${rule.filterBladeRuleId})` : "";
+    return `${rule.effect} rule ${rule.order}${id}${rule.continues ? " + Continue" : ""}`;
+  });
+  const remaining = target.rules.length - summaries.length;
+  if (remaining > 0) summaries.push(`+${remaining} more`);
+  return summaries.map(markdownText).join("; ") || "Candidate references found; inspect audit details";
 }
 
 function serializeFilterAudit(audit: FilterBladeAudit): string[] {

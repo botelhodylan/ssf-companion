@@ -118,5 +118,7 @@ describe("priority plan export", () => {
     expect(auditedGuide).toContain("FilterBlade ID `uniques;tier2`");
     expect(auditedGuide).toContain("Existing presentation: `SetFontSize 40`; `PlayAlertSound 5 300`");
     expect(auditedGuide).toContain("not proof that an item will show or hide");
+    expect(auditedGuide).toContain("FilterBlade candidate rules");
+    expect(auditedGuide).toContain("Show rule 4 (uniques;tier2)");
   });
 });
