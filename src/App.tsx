@@ -19,6 +19,7 @@ import {
 import type { BuildManifest, BuildRole, ItemGoal, ProgressionStage } from "./core/types";
 import { normalizeBuildInput } from "./core/build-import";
 import { buildProgressionRoute, type ProgressionRouteStep } from "./core/progression-route";
+import { auditFilterBladeFile, type FilterBladeAudit } from "./core/filterblade-audit";
 import { parsePassiveTreeExport, type PassiveTreeDataset } from "./core/passive-tree-data";
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
 import { rankItemsByRelevance } from "./core/relevance";
@@ -160,6 +161,9 @@ export default function App() {
   const [progressionStageConfirmed, setProgressionStageConfirmed] = useState(false);
   const [selectedRouteStepId, setSelectedRouteStepId] = useState("");
   const [passiveTreeVersionSelection, setPassiveTreeVersionSelection] = useState("");
+  const [filterAudit, setFilterAudit] = useState<{ audit: FilterBladeAudit; planKey: string } | null>(null);
+  const [filterAuditModalOpen, setFilterAuditModalOpen] = useState(false);
+  const [filterAuditImporting, setFilterAuditImporting] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [importInput, setImportInput] = useState("");
   const [importing, setImporting] = useState(false);
@@ -174,6 +178,7 @@ export default function App() {
   const [appVersion, setAppVersion] = useState("Source preview");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const passiveTreeFileInputRef = useRef<HTMLInputElement>(null);
+  const filterFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void window.ssfDesktop?.getAppVersion().then(setAppVersion).catch(() => undefined);
@@ -265,6 +270,16 @@ export default function App() {
   }), [ranked, candidates, buildsForScoring]);
   const selectedRow = rows.find((row) => row.relevance.itemId === selectedItemId) ?? rows[0];
   const pinnedIds = new Set(savedGoals.filter((entry) => entry.buildId === selectedBuild?.id).map((entry) => entry.goal.id.replace(/^user-pin-/, "")));
+  const filterAuditPlanKey = useMemo(() => JSON.stringify({
+    stage: currentStage,
+    builds: buildsForScoring.map((build) => ({ id: build.id, role: build.role, goals: build.itemGoals })),
+    targets: rows.map((row) => ({ item: row.candidate.name, baseType: row.candidate.baseType ?? null })),
+  }), [currentStage, buildsForScoring, rows]);
+
+  useEffect(() => {
+    setFilterAudit(null);
+    setFilterAuditModalOpen(false);
+  }, [filterAuditPlanKey]);
 
   useEffect(() => {
     if (rows.length && !rows.some((row) => row.relevance.itemId === selectedItemId)) setSelectedItemId(rows[0].relevance.itemId);
@@ -500,6 +515,51 @@ export default function App() {
       return;
     }
     importPassiveTreeFile({ name: file.name, content: await file.text() });
+    event.target.value = "";
+  }
+
+  function acceptFilterFile(file: { name: string; content: string }) {
+    try {
+      const audit = auditFilterBladeFile(file.content, file.name, rows.map((row) => ({
+        item: row.candidate.name,
+        baseType: row.candidate.baseType,
+      })));
+      setFilterAudit({ audit, planKey: filterAuditPlanKey });
+      setFilterAuditModalOpen(true);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The filter file could not be audited.");
+    }
+  }
+
+  async function openFilterAudit() {
+    if (!rows.length) {
+      notify("Import or select a build before auditing a FilterBlade export.");
+      return;
+    }
+    if (window.ssfDesktop) {
+      setFilterAuditImporting(true);
+      try {
+        const file = await window.ssfDesktop.openFilterFile();
+        if (file) acceptFilterFile(file);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "The filter file could not be opened.");
+      } finally {
+        setFilterAuditImporting(false);
+      }
+      return;
+    }
+    filterFileInputRef.current?.click();
+  }
+
+  async function browserFilterFileChosen(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8_000_000) {
+      notify("That filter file is too large to audit safely.");
+      event.target.value = "";
+      return;
+    }
+    acceptFilterFile({ name: file.name, content: await file.text() });
     event.target.value = "";
   }
 
@@ -824,9 +884,13 @@ export default function App() {
             <p>Review useful targets in FilterBlade, then export your filter with its existing style and strictness.</p>
           </div>
           <div className="handoff-actions">
+            <button className="button button-outline filter-audit-trigger" type="button" onClick={() => void openFilterAudit()} disabled={filterAuditImporting}>
+              <FolderOpen size={15} /> {filterAuditImporting ? "Opening filter…" : "Audit existing filter"}
+            </button>
             <button className="text-link filterblade-link" type="button" onClick={() => void openTrustedLink("https://www.filterblade.xyz/?game=Poe1")}>
               Open FilterBlade <ExternalLink size={13} />
             </button>
+            <input ref={filterFileInputRef} className="sr-only" type="file" accept=".filter,.txt,text/plain" onChange={(event) => void browserFilterFileChosen(event)} />
             <div className="export-group">
               <button className="button button-primary export-main" type="button" onClick={() => exportContent("markdown")}>
                 <ArrowDownToLine size={16} /> Export FilterBlade guide
@@ -1232,6 +1296,59 @@ export default function App() {
             </div>
             <p>Local character data is saved under <strong>{selectedLeague?.name ?? "the selected league"}</strong>. You can sync official character data later if GGG OAuth access becomes available.</p>
           </form>
+        </Modal>
+      )}
+
+      {filterAuditModalOpen && filterAudit?.planKey === filterAuditPlanKey && (
+        <Modal title="FilterBlade rule audit" width="wide" onClose={() => setFilterAuditModalOpen(false)} footer={
+          <button className="button button-primary" type="button" onClick={() => setFilterAuditModalOpen(false)}>Done</button>
+        }>
+          <div className="modal-callout filter-audit-callout"><CircleHelp size={18} /><p>This is a read-only local audit. It does not modify or upload your filter. Matches are candidate BaseType mentions: the audit lists other rule lines but does not evaluate them, and it does not open files named by Import rules.</p></div>
+          <div className="filter-audit-summary">
+            <div><span>FILE</span><strong>{filterAudit.audit.sourceFile}</strong></div>
+            <div><span>ACTIVE RULES</span><strong>{filterAudit.audit.activeRuleCount.toLocaleString()}</strong></div>
+            <div><span>IMPORTS NOT FOLLOWED</span><strong>{filterAudit.audit.importCount.toLocaleString()}</strong></div>
+          </div>
+          <div className="filter-audit-targets">
+            {filterAudit.audit.targets.map((target, targetIndex) => (
+              <section className="filter-audit-target" key={`${target.item}-${target.baseType ?? "unknown"}-${targetIndex}`}>
+                <header>
+                  <div><strong>{target.item}</strong><span>{target.baseType ?? "Base type not available in this build goal"}</span></div>
+                  <span className={`filter-audit-status audit-${target.status}`}>
+                    {target.status === "base_unknown" ? "NEEDS BASE TYPE" : target.status === "no_reference" ? "NO BASETYPE MENTION" : `${target.rules.length} CANDIDATE ${target.rules.length === 1 ? "RULE" : "RULES"}`}
+                  </span>
+                </header>
+                {target.status === "no_reference" && <p className="filter-audit-empty">No literal BaseType mention was found in active rules in this file. Broader item-class rules and imported filters are outside this audit.</p>}
+                {target.status === "base_unknown" && <p className="filter-audit-empty">This plan target has no known base type to compare. Review it by item name in your existing FilterBlade setup.</p>}
+                {target.rules.map((rule) => (
+                  <article className="filter-audit-rule" key={`${rule.order}-${rule.line}`}>
+                    <div className="filter-audit-rule-head">
+                      <div><strong>{rule.effect}</strong><span>Rule {rule.order} · line {rule.line}</span></div>
+                      {rule.filterBladeRuleId && <code>{rule.filterBladeRuleId}</code>}
+                    </div>
+                    <div className="filter-audit-detail">
+                      <span>BaseType clauses</span>
+                      <div className="filter-audit-code-list">
+                        {rule.baseTypeClauses.map((clause, clauseIndex) => (
+                          <div className="filter-audit-code-row" key={`${clause.text}-${clauseIndex}`}>
+                            <b className={clause.relation === "exclude" ? "audit-exclude" : clause.mentionsTarget ? "audit-match" : "audit-context"}>
+                              {clause.relation === "exclude" ? "EXCLUDE" : clause.mentionsTarget ? "MENTION" : "OTHER"}
+                              {clause.exact ? " · EXACT" : ""}
+                            </b>
+                            <code>{clause.text}</code>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {rule.otherRuleLines.length > 0 && <div className="filter-audit-detail"><span>Other conditions / rule lines</span><div className="filter-audit-code-list">{rule.otherRuleLines.map((line, lineIndex) => <code key={`${line}-${lineIndex}`}>{line}</code>)}</div></div>}
+                    {rule.presentation.length > 0 && <div className="filter-audit-detail"><span>Existing presentation</span><div className="filter-audit-code-list">{rule.presentation.map((line, lineIndex) => <code key={`${line}-${lineIndex}`}>{line}</code>)}</div></div>}
+                    {rule.continues && <span className="filter-audit-continue">CONTINUE · later rules can also apply</span>}
+                  </article>
+                ))}
+              </section>
+            ))}
+          </div>
+          <ul className="filter-audit-limitations">{filterAudit.audit.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
         </Modal>
       )}
     </div>

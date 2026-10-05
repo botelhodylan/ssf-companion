@@ -161,7 +161,7 @@ Imported PoB trees retain their source version and node IDs. Players can optiona
 
 ### Current contract
 
-SSF Companion exports semantic priorities and keeps the user's selected FilterBlade/NeverSink filter untouched. It does not inject colors, sounds, styles, strictness, or raw `.filter` text. The export is a reviewable sidecar plan, not a game-ready loot filter. The UI links to FilterBlade for the user's normal styling workflow.
+SSF Companion exports semantic priorities and keeps the user's selected FilterBlade/NeverSink filter untouched. It does not inject colors, sounds, styles, strictness, or raw `.filter` text. The export is a reviewable sidecar plan, not a game-ready loot filter. The UI links to FilterBlade for the user's normal styling workflow. Players can optionally select an exported `.filter` and run a read-only local audit that lists candidate `BaseType` mentions for plan targets with rule order/line, `$type`/`$tier` identifiers, related rule lines, known presentation directives, `Continue`, and `Import` counts. The raw file content is discarded after parsing; only the basename and extracted audit result are held in the current UI session.
 
 ### Verified integration surface
 
@@ -171,7 +171,7 @@ The official [PoE item-filter syntax](https://www.pathofexile.com/item-filter/ab
 
 ### Future integration gate
 
-V1 exports a Markdown review guide and JSON/CSV semantic priorities. The guide names target items/bases, scores, matched builds, and reasons; it is not an importable module or a generated `.filter` file. Players apply chosen changes manually inside their existing FilterBlade setup. “Lower priority” never means hide or disable. FilterBlade's “My Modules” workflow is managed inside FilterBlade; its public `.options` DSL defines the customizer UI, and no public per-player priority-import API has been verified. Recheck the upstream option-file documentation and customizer before changing this boundary.
+V1 exports a Markdown review guide and JSON/CSV semantic priorities and includes the optional local read-only audit described above. The guide names target items/bases, scores, matched builds, and reasons; it is not an importable module or a generated `.filter` file. Audit results are candidate literal `BaseType` references: every filter-block condition must match for that rule to apply, `Continue` affects later matching, and `Import` can bring in additional rule files, so the audit never claims to know whether a target is shown or hidden. Players apply chosen changes manually inside their existing FilterBlade setup. “Lower priority” never means hide or disable. FilterBlade's “My Modules” workflow is managed inside FilterBlade; its public `.options` DSL defines the customizer UI, and no public per-player priority-import API has been verified. Recheck the upstream option-file documentation and customizer before changing this boundary.
 
 Before producing an importable FilterBlade module or a transformed `.filter` file, validate a stable rule/tag mapping, test the exact module with NeverSink/FilterBlade maintainers, preserve save-state IDs, confirm custom style/audio round-trips, and run game-version validation. Any future writer must parse, show a diff, preserve unrelated directives and comments, write a new file, and require a user-selected export path. Never overwrite the source filter. Online filter upload/update is a separate opt-in action with an explicit preview; it must not be represented as a FilterBlade integration.
 
