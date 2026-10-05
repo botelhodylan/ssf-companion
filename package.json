@@ -59,7 +59,7 @@
         "portable"
       ],
       "artifactName": "SSF-Companion-${version}-portable.${ext}",
-      "signAndEditExecutable": false
+      "signExecutable": false
     }
   }
 }

@@ -4,6 +4,7 @@ This project follows a simple release history. Changes are grouped by version; G
 
 ## Unreleased
 
+- Keep Windows portable builds unsigned while preserving the SSF Companion product name and version metadata.
 - Add a read-only local audit for exported PoE filters, showing candidate build-target BaseType mentions and existing NeverSink/FilterBlade rule styling without changing or uploading the selected file.
 - Add an optional combined Markdown handoff that places current audit references and existing style directives alongside build-aware priority recommendations.
 - Pair each priority target with its bounded candidate NeverSink/FilterBlade rule references in the Markdown handoff, while labeling them as clues rather than effective filter outcomes.
