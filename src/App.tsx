@@ -1556,7 +1556,7 @@ export default function App() {
                     <div className="route-inspector-section">
                       <strong>Evidence</strong>
                       {selectedRouteStep.evidence.map((item, index) => (
-                        <div className="route-evidence" key={`${item.source}-${item.reference ?? index}`}>
+                        <div className="route-evidence" key={`${item.source}-${item.reference ?? ""}-${index}`}>
                           <span>{item.source.replaceAll("_", " ")} · {item.version}</span>
                           <p>{item.detail}</p>
                           {item.url && <button className="text-link route-evidence-link" type="button" onClick={() => void openTrustedLink(item.url!)}>Open source <ExternalLink size={12} /></button>}

@@ -42,7 +42,7 @@ pnpm test:e2e
 pnpm package:win
 ```
 
-Playwright launches Electron with an isolated profile to check the desktop preload bridge and app version, then runs the renderer in Chromium to check route-pack import through the cited mechanic-playbook inspector. CI installs Chromium and runs both checks on Windows after the unit suite and production build.
+Playwright launches Electron with an isolated profile to check the desktop preload bridge and app version, exercises the league-first PoB-to-character route locally, and runs the renderer in Chromium to check route-pack import through the cited mechanic-playbook inspector. CI installs Chromium and runs all three checks on Windows after the unit suite and production build.
 
 `pnpm package:win` creates a portable Windows executable in `release/`.
 Windows downloads are unsigned for now. The preview channel publishes a SHA-256 checksum, so Windows may show an unknown-publisher warning. The signed stable-release workflow remains dormant unless signing is requested and configured.
