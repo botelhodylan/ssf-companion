@@ -757,7 +757,7 @@ export default function App() {
         <footer className="filter-handoff">
           <div className="handoff-copy">
             <h2>Bring priorities into FilterBlade</h2>
-            <p>Export a manual review guide; apply useful targets inside your existing FilterBlade filter.</p>
+            <p>Review useful targets in FilterBlade, then export your filter with its existing style and strictness.</p>
           </div>
           <div className="handoff-actions">
             <button className="text-link filterblade-link" type="button" onClick={() => void openTrustedLink("https://www.filterblade.xyz/?game=Poe1")}>

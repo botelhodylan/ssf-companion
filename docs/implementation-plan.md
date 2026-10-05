@@ -52,7 +52,7 @@
 
 ## Phase 6 — FilterBlade/NeverSink handoff
 
-- **V1 delivered:** Export a manual Markdown review guide and semantic JSON/CSV priorities with target bases, roles, scores, and explanations. The guide is explicit that it is not a FilterBlade-importable module and that lower priority is not a hide instruction.
+- **V1 delivered:** Export a manual Markdown review guide and semantic JSON/CSV priorities with target bases, roles, scores, and explanations. The guide is explicit that it is not a FilterBlade-importable module, gives FilterBlade's own module reuse path, and says lower priority is not a hide instruction.
 - Prototype a semantic adapter against versioned base filters and sample custom styles/sounds.
 - Preserve the chosen style, colors, sounds, strictness, and existing rule IDs; add only transparent semantic priority overlays.
 - Provide a diff, validation status, backup copy, and user-selected new output file. Never overwrite the source filter.

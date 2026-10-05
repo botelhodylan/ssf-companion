@@ -82,5 +82,8 @@ describe("priority plan export", () => {
     expect(guide).toContain("The Taming (Prismatic Ring)");
     expect(guide).toContain("ACTIVE: Sample Winter Orb Elementalist");
     expect(guide).toContain("it is not a hide or disable instruction");
+    expect(guide).toContain("My Modules → Create new module");
+    expect(guide).toContain("Overview → Modules");
+    expect(guide).toContain("it cannot be uploaded as a module");
   });
 });
