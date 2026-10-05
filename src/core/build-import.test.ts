@@ -30,10 +30,10 @@ Torturer's Mask</Item>
     <Item id="3">Rarity: UNIQUE
 The Taming
 Prismatic Ring</Item>
-    <ItemSet id="1" name="Old gear">
+    <ItemSet id="1" title="Old gear">
       <Slot name="Ring 1" itemId="1"/>
     </ItemSet>
-    <ItemSet id="2" name="Mapping gear">
+    <ItemSet id="2" title="Mapping gear" useSecondWeaponSet="true">
       <Slot name="Helmet" itemId="2"/>
       <Slot name="Ring 1" itemId="3"/>
     </ItemSet>
@@ -78,6 +78,21 @@ describe("normalizeBuildInput", () => {
       quality: 20,
       enabled: true,
     });
+    expect(result.manifest?.skills?.groups.some((group) => group.gems.some((gem) => gem.name === "Fireball"))).toBe(false);
+    expect(result.manifest?.skillSets).toEqual([
+      expect.objectContaining({
+        id: 1,
+        name: "Old setup",
+        isActive: false,
+        groups: [expect.objectContaining({ label: "Old skill", isMainSkillGroup: false })],
+      }),
+      expect.objectContaining({
+        id: 2,
+        name: "Mapping",
+        isActive: true,
+        groups: expect.arrayContaining([expect.objectContaining({ label: "Winter Orb 6-link", isMainSkillGroup: true })]),
+      }),
+    ]);
     expect(result.manifest?.equippedItems).toEqual(expect.arrayContaining([
       expect.objectContaining({
         slotName: "Helmet",
@@ -95,6 +110,25 @@ describe("normalizeBuildInput", () => {
         baseType: "Prismatic Ring",
       }),
     ]));
+    expect(result.manifest?.equipmentSets).toEqual([
+      expect.objectContaining({
+        id: 1,
+        name: "Old gear",
+        isActive: false,
+        equippedItems: [expect.objectContaining({ itemName: "Old Unique", slotName: "Ring 1" })],
+      }),
+      expect.objectContaining({
+        id: 2,
+        name: "Mapping gear",
+        isActive: true,
+        useSecondWeaponSet: true,
+        equippedItems: expect.arrayContaining([
+          expect.objectContaining({ itemName: "Foe Shell", slotName: "Helmet" }),
+          expect.objectContaining({ itemName: "The Taming", slotName: "Ring 1" }),
+        ]),
+      }),
+    ]);
+    expect(result.manifest?.itemGoals.some((goal) => goal.match.itemNames?.includes("Old Unique"))).toBe(false);
     expect(result.manifest?.passiveAllocationCount).toBe(3);
     expect(result.manifest?.passiveSpecs).toEqual([
       { id: 1, name: "Campaign", treeVersion: "3_26", isActive: false, allocatedNodeIds: [1, 2] },

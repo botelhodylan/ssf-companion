@@ -3,7 +3,9 @@ import type {
   BuildGemFact,
   BuildManifest,
   BuildManifestConfidence,
+  BuildEquipmentSetFact,
   BuildSkillGroup,
+  BuildSkillSetFact,
   BuildSkillSummary,
   BuildSourceFetchPlan,
   EquippedItemFact,
@@ -26,7 +28,8 @@ const LIMITATIONS = [
 
 const MAX_POB_XML_CHARACTERS = 5_000_000;
 const MAX_POB_CODE_CHARACTERS = 7_000_000;
-const MAX_SKILL_GROUPS = 64;
+const MAX_BUILD_SETS = 64;
+const MAX_SKILL_GROUPS_PER_SET = 64;
 const MAX_GEMS_PER_GROUP = 32;
 const MAX_EQUIPPED_SLOTS = 64;
 const MAX_PASSIVE_NODE_IDS = 500;
@@ -165,8 +168,10 @@ function resultFromXml(
   const ascendancy = decodeXml(buildAttributes.ascendClassName ?? "").trim() || undefined;
   const level = positiveInteger(buildAttributes.level);
   const parseWarnings: string[] = [];
-  const skills = parseSkillSummary(xml, buildAttributes, parseWarnings);
-  const equippedItems = parseEquippedItems(xml, parseWarnings);
+  const parsedSkillData = parseSkillSets(xml, buildAttributes, parseWarnings);
+  const skills = parsedSkillData.summary;
+  const equipmentSets = parseEquipmentSets(xml, parseWarnings);
+  const equippedItems = equipmentSets.find((set) => set.isActive)?.equippedItems ?? [];
   const itemGoals = itemGoalsFromEquippedItems(equippedItems);
   const parsedPassiveSpecs = parsePassiveSpecs(xml, parseWarnings);
   const passiveAllocationCount = parsedPassiveSpecs.active?.allocatedNodeIds.length;
@@ -188,7 +193,9 @@ function resultFromXml(
     progressionStage: inferredStage,
     source: { kind: "pob_code", importState },
     skills,
+    ...(parsedSkillData.sets.length ? { skillSets: parsedSkillData.sets } : {}),
     equippedItems,
+    ...(equipmentSets.length ? { equipmentSets } : {}),
     ...(passiveAllocationCount !== undefined ? { passiveAllocationCount } : {}),
     ...(parsedPassiveSpecs.specs.length ? { passiveSpecs: parsedPassiveSpecs.specs } : {}),
     parseWarnings,
@@ -198,7 +205,7 @@ function resultFromXml(
 
   const limitations = [
     "The level-based progression stage is an estimate; confirm it against the selected character.",
-    "Skill and equipment summaries cover only the active PoB skill and item sets.",
+    "Active skill and equipment summaries refer to the selected PoB sets; imported alternatives are preserved separately without inferring a transition order.",
     "Passive specs preserve the node IDs and tree versions from the PoB export; no passive-tree database is loaded to validate or recommend a route.",
     "No DPS, item-mod evaluation, or build simulation is performed.",
   ];
@@ -220,72 +227,111 @@ function resultFromXml(
   };
 }
 
-function parseSkillSummary(
+interface ParsedSkillData {
+  readonly summary: BuildSkillSummary;
+  readonly sets: readonly BuildSkillSetFact[];
+}
+
+function parseSkillSets(
   xml: string,
   buildAttributes: Readonly<Record<string, string>>,
   warnings: string[],
-): BuildSkillSummary {
+): ParsedSkillData {
   const skillsSection = findSection(xml, "Skills");
   if (!skillsSection) {
     warnings.push("The PoB XML has no Skills section.");
-    return { gemRoleMethod: "name_suffix_heuristic", groups: [], supportGemNames: [] };
+    return {
+      summary: { gemRoleMethod: "name_suffix_heuristic", groups: [], supportGemNames: [] },
+      sets: [],
+    };
   }
 
   const skillSetCollection = collectMatches(
     /<SkillSet\b([^>]*)>([\s\S]*?)<\/SkillSet\s*>/gi,
     skillsSection.inner,
-    MAX_SKILL_GROUPS,
+    MAX_BUILD_SETS,
   );
-  const skillSets = skillSetCollection.matches;
-  if (skillSetCollection.truncated) warnings.push(`Skill-set parsing stopped at ${MAX_SKILL_GROUPS} sets.`);
+  const rawSkillSets = skillSetCollection.matches;
+  if (skillSetCollection.truncated) warnings.push(`Skill-set parsing stopped at ${MAX_BUILD_SETS} sets.`);
   let selectedSetId = positiveInteger(skillsSection.attributes.activeSkillSet);
-  if (selectedSetId === undefined) selectedSetId = skillSets.length === 1 ? positiveInteger(readAttributes(skillSets[0]?.[1] ?? "").id) ?? 1 : 1;
+  if (selectedSetId === undefined) {
+    selectedSetId = rawSkillSets.length === 1
+      ? positiveInteger(readAttributes(rawSkillSets[0]?.[1] ?? "").id) ?? 1
+      : 1;
+  }
 
-  let selectedSet: { attributes: Record<string, string>; inner: string } | undefined;
-  let activeSkillSetName: string | undefined;
-  if (skillSets.length) {
-    for (const match of skillSets) {
-      const attributes = readAttributes(match[1] ?? "");
-      if (positiveInteger(attributes.id) === selectedSetId) {
-        selectedSet = { attributes, inner: match[2] ?? "" };
-        activeSkillSetName = decodeXml(attributes.title ?? "").trim() || undefined;
-        break;
-      }
+  const sourceSets = rawSkillSets.length
+    ? rawSkillSets.map((match) => ({
+        attributes: readAttributes(match[1] ?? ""),
+        inner: match[2] ?? "",
+      }))
+    : [{ attributes: { id: String(selectedSetId) }, inner: skillsSection.inner }];
+  const seenIds = new Set<number>();
+  const sets: BuildSkillSetFact[] = [];
+  for (let index = 0; index < sourceSets.length; index += 1) {
+    const sourceSet = sourceSets[index];
+    if (!sourceSet) continue;
+    const id = positiveInteger(sourceSet.attributes.id) ?? index + 1;
+    if (seenIds.has(id)) {
+      warnings.push(`Duplicate PoB skill set ID ${id} was omitted.`);
+      continue;
     }
-    if (!selectedSet) warnings.push(`Active PoB skill set ${selectedSetId} was not found.`);
-  } else {
-    // PoB's loader accepts the legacy flat <Skills><Skill> representation.
-    selectedSet = { attributes: { id: String(selectedSetId) }, inner: skillsSection.inner };
+    seenIds.add(id);
+    const isActive = id === selectedSetId;
+    const name = decodeXml(sourceSet.attributes.title ?? "").trim() || undefined;
+    sets.push({
+      id,
+      ...(name ? { name } : {}),
+      isActive,
+      groups: parseSkillGroups(sourceSet.inner, isActive, buildAttributes, name, warnings),
+    });
   }
 
-  if (!selectedSet) {
-    return {
-      activeSkillSetId: selectedSetId,
+  const selectedSet = sets.find((set) => set.isActive);
+  if (rawSkillSets.length && !selectedSet) warnings.push(`Active PoB skill set ${selectedSetId} was not found.`);
+  const groups = selectedSet?.groups ?? [];
+  const mainSkillGroup = groups.find((group) => group.isMainSkillGroup);
+  return {
+    summary: {
+      ...(selectedSet ? { activeSkillSetId: selectedSet.id } : { activeSkillSetId: selectedSetId }),
+      ...(selectedSet?.name ? { activeSkillSetName: selectedSet.name } : {}),
+      ...(mainSkillGroup ? { mainSkillGroupIndex: mainSkillGroup.index } : {}),
+      ...(mainSkillGroup?.mainSkillName ? { mainSkillName: mainSkillGroup.mainSkillName } : {}),
       gemRoleMethod: "name_suffix_heuristic",
-      groups: [],
-      supportGemNames: [],
-    };
-  }
+      supportGemNames: [...new Set(groups.flatMap((group) => group.supportGemNames))],
+      groups,
+    },
+    sets,
+  };
+}
 
+function parseSkillGroups(
+  content: string,
+  isActiveSet: boolean,
+  buildAttributes: Readonly<Record<string, string>>,
+  setName: string | undefined,
+  warnings: string[],
+): BuildSkillGroup[] {
   const skillGroupCollection = collectMatches(
     /<Skill\b([^>]*)>([\s\S]*?)<\/Skill\s*>/gi,
-    selectedSet.inner,
-    MAX_SKILL_GROUPS,
+    content,
+    MAX_SKILL_GROUPS_PER_SET,
   );
-  const skillGroupMatches = skillGroupCollection.matches;
-  const mainGroupIndex = positiveInteger(buildAttributes.mainSkillIndex ?? buildAttributes.mainSocketGroup) ?? 1;
   if (skillGroupCollection.truncated) {
-    warnings.push(`The active skill set has more than ${MAX_SKILL_GROUPS} groups; remaining groups were omitted.`);
+    warnings.push(`Skill-set ${setName ?? "(unnamed)"} has more than ${MAX_SKILL_GROUPS_PER_SET} groups; remaining groups were omitted.`);
   }
+  const mainGroupIndex = isActiveSet
+    ? positiveInteger(buildAttributes.mainSkillIndex ?? buildAttributes.mainSocketGroup) ?? 1
+    : undefined;
 
-  const groups: BuildSkillGroup[] = skillGroupMatches.slice(0, MAX_SKILL_GROUPS).map((match, index) => {
+  const groups: BuildSkillGroup[] = skillGroupCollection.matches.slice(0, MAX_SKILL_GROUPS_PER_SET).map((match, index) => {
     const attributes = readAttributes(match[1] ?? "");
     const groupIndex = index + 1;
-    const isMainSkillGroup = groupIndex === mainGroupIndex;
+    const isMainSkillGroup = isActiveSet && groupIndex === mainGroupIndex;
     const gemCollection = collectMatches(/<Gem\b([^>]*)\/?\s*>/gi, match[2] ?? "", MAX_GEMS_PER_GROUP);
     const rawGems = gemCollection.matches;
     if (gemCollection.truncated) {
-      warnings.push(`Skill group ${groupIndex} has more than ${MAX_GEMS_PER_GROUP} gems; remaining gems were omitted.`);
+      warnings.push(`Skill-set ${setName ?? "(unnamed)"} group ${groupIndex} has more than ${MAX_GEMS_PER_GROUP} gems; remaining gems were omitted.`);
     }
     const gems: BuildGemFact[] = rawGems.slice(0, MAX_GEMS_PER_GROUP).map((gemMatch) => {
       const gemAttributes = readAttributes(gemMatch[1] ?? "");
@@ -325,10 +371,10 @@ function parseSkillSummary(
     const mainActiveSkillIndex = positiveInteger(attributes.mainActiveSkill) ?? 1;
     const mainSkillName = isMainSkillGroup ? activeGemNames[mainActiveSkillIndex - 1]?.name : undefined;
     if (isMainSkillGroup && !mainSkillName && gems.length) {
-      warnings.push("The selected main skill could not be resolved from the main skill group's gem names.");
+      warnings.push(`The selected main skill in ${setName ?? "the active skill set"} could not be resolved from its gem names.`);
     }
     if (gems.some((gem) => gem.role === "unknown")) {
-      warnings.push(`Skill group ${groupIndex} contains a gem with no display name.`);
+      warnings.push(`Skill-set ${setName ?? "(unnamed)"} group ${groupIndex} contains a gem with no display name.`);
     }
     return {
       index: groupIndex,
@@ -348,22 +394,14 @@ function parseSkillSummary(
     };
   });
 
-  if (!groups.length) warnings.push("No socket groups were found in the active PoB skill set.");
-  if (mainGroupIndex > groups.length) warnings.push(`Main skill group index ${mainGroupIndex} is outside the active skill set.`);
-  const supportGemNames = [...new Set(groups.flatMap((group) => group.supportGemNames))];
-  const mainSkillGroup = groups.find((group) => group.isMainSkillGroup);
-  return {
-    activeSkillSetId: selectedSetId,
-    ...(activeSkillSetName ? { activeSkillSetName } : {}),
-    ...(mainSkillGroup ? { mainSkillGroupIndex: mainSkillGroup.index } : {}),
-    ...(mainSkillGroup?.mainSkillName ? { mainSkillName: mainSkillGroup.mainSkillName } : {}),
-    gemRoleMethod: "name_suffix_heuristic",
-    supportGemNames,
-    groups,
-  };
+  if (isActiveSet && !groups.length) warnings.push("No socket groups were found in the active PoB skill set.");
+  if (isActiveSet && mainGroupIndex !== undefined && mainGroupIndex > groups.length) {
+    warnings.push(`Main skill group index ${mainGroupIndex} is outside the active skill set.`);
+  }
+  return groups;
 }
 
-function parseEquippedItems(xml: string, warnings: string[]): EquippedItemFact[] {
+function parseEquipmentSets(xml: string, warnings: string[]): BuildEquipmentSetFact[] {
   const itemsSection = findSection(xml, "Items");
   if (!itemsSection) {
     warnings.push("The PoB XML has no Items section.");
@@ -374,30 +412,51 @@ function parseEquippedItems(xml: string, warnings: string[]): EquippedItemFact[]
   const itemSetCollection = collectMatches(
     /<ItemSet\b([^>]*)>([\s\S]*?)<\/ItemSet\s*>/gi,
     itemsSection.inner,
-    MAX_SKILL_GROUPS,
+    MAX_BUILD_SETS,
   );
-  const itemSets = itemSetCollection.matches;
-  if (itemSetCollection.truncated) warnings.push(`Item-set parsing stopped at ${MAX_SKILL_GROUPS} sets.`);
-  let activeSetInner = itemsSection.inner;
-  if (itemSets.length) {
-    const activeSet = itemSets.find((match) => positiveInteger(readAttributes(match[1] ?? "").id) === activeSetId);
-    if (!activeSet) {
-      warnings.push(`Active PoB item set ${activeSetId} was not found.`);
-      return [];
-    }
-    activeSetInner = activeSet[2] ?? "";
+  const itemSets = itemSetCollection.matches.map((match) => ({
+    attributes: readAttributes(match[1] ?? ""),
+    inner: match[2] ?? "",
+  }));
+  if (itemSetCollection.truncated) warnings.push(`Item-set parsing stopped at ${MAX_BUILD_SETS} sets.`);
+  if (!itemSets.length && !itemSetCollection.truncated) {
+    // Older PoB exports can keep Slots directly under Items.
+    const legacySlots = collectMatches(/<Slot\b([^>]*)\/?\s*>/gi, itemsSection.inner, MAX_EQUIPPED_SLOTS);
+    if (!legacySlots.matches.some((match) => {
+      const attributes = readAttributes(match[1] ?? "");
+      return attributes.itemId && attributes.itemId !== "0";
+    })) return [];
+    itemSets.push({
+      attributes: { id: String(activeSetId), title: "Default" },
+      inner: itemsSection.inner,
+    });
   }
 
-  const slotCollection = collectMatches(/<Slot\b([^>]*)\/?\s*>/gi, activeSetInner, MAX_EQUIPPED_SLOTS);
-  const slots = slotCollection.matches
-    .map((match) => readAttributes(match[1] ?? ""))
-    .filter((attributes) => attributes.itemId && attributes.itemId !== "0")
-    .slice(0, MAX_EQUIPPED_SLOTS);
-  if (slotCollection.truncated) {
-    warnings.push(`Equipped item parsing stopped at ${MAX_EQUIPPED_SLOTS} slots.`);
+  const slotSets: { readonly id: number; readonly attributes: Record<string, string>; readonly slots: Record<string, string>[] }[] = [];
+  const seenSetIds = new Set<number>();
+  const referencedIds = new Set<string>();
+  for (let index = 0; index < itemSets.length; index += 1) {
+    const itemSet = itemSets[index];
+    if (!itemSet) continue;
+    const id = positiveInteger(itemSet.attributes.id) ?? index + 1;
+    if (seenSetIds.has(id)) {
+      warnings.push(`Duplicate PoB item set ID ${id} was omitted.`);
+      continue;
+    }
+    seenSetIds.add(id);
+    const slotCollection = collectMatches(/<Slot\b([^>]*)\/?\s*>/gi, itemSet.inner, MAX_EQUIPPED_SLOTS);
+    const slots = slotCollection.matches
+      .map((match) => readAttributes(match[1] ?? ""))
+      .filter((attributes) => attributes.itemId && attributes.itemId !== "0")
+      .slice(0, MAX_EQUIPPED_SLOTS);
+    if (slotCollection.truncated) {
+      warnings.push(`Item set ${decodeXml(itemSet.attributes.title ?? "").trim() || id} has more than ${MAX_EQUIPPED_SLOTS} slots; remaining slots were omitted.`);
+    }
+    for (const slot of slots) if (slot.itemId) referencedIds.add(slot.itemId);
+    slotSets.push({ id, attributes: itemSet.attributes, slots });
   }
-  const referencedIds = new Set(slots.map((attributes) => attributes.itemId).filter((id): id is string => Boolean(id)));
-  if (!referencedIds.size) return [];
+
+  if (!seenSetIds.has(activeSetId)) warnings.push(`Active PoB item set ${activeSetId} was not found.`);
 
   const itemRecords = new Map<string, ParsedPobItem>();
   const itemRegex = /<Item\b([^>]*)>([\s\S]*?)<\/Item\s*>/gi;
@@ -407,27 +466,38 @@ function parseEquippedItems(xml: string, warnings: string[]): EquippedItemFact[]
     if (!itemId || !referencedIds.has(itemId)) continue;
     const parsed = parsePobItemText(match[2] ?? "");
     if (parsed) itemRecords.set(itemId, parsed);
-    if (itemRecords.size === referencedIds.size) break;
+    if (referencedIds.size && itemRecords.size === referencedIds.size) break;
   }
 
-  const facts: EquippedItemFact[] = [];
-  for (const slot of slots) {
-    const itemId = slot.itemId;
-    const parsed = itemId ? itemRecords.get(itemId) : undefined;
-    if (!itemId || !parsed) {
-      warnings.push(`PoB item ${itemId ?? "?"} in slot ${slot.name ?? "(unnamed)"} could not be summarized.`);
-      continue;
+  return slotSets.map(({ id, attributes, slots }) => {
+    const name = decodeXml(attributes.title ?? attributes.name ?? "").trim() || undefined;
+    const equippedItems: EquippedItemFact[] = [];
+    for (const slot of slots) {
+      const itemId = slot.itemId;
+      const parsed = itemId ? itemRecords.get(itemId) : undefined;
+      if (!itemId || !parsed) {
+        warnings.push(`PoB item ${itemId ?? "?"} in ${name ?? `item set ${id}`} slot ${slot.name ?? "(unnamed)"} could not be summarized.`);
+        continue;
+      }
+      equippedItems.push({
+        slotName: decodeXml(slot.name ?? slot.id ?? "Unknown slot").trim(),
+        itemId,
+        ...(parsed.rarity ? { rarity: parsed.rarity } : {}),
+        ...(parsed.itemName ? { itemName: parsed.itemName } : {}),
+        ...(parsed.rarity === "UNIQUE" && parsed.itemName ? { uniqueName: parsed.itemName } : {}),
+        ...(parsed.baseType ? { baseType: parsed.baseType } : {}),
+      });
     }
-    facts.push({
-      slotName: decodeXml(slot.name ?? slot.id ?? "Unknown slot").trim(),
-      itemId,
-      ...(parsed.rarity ? { rarity: parsed.rarity } : {}),
-      ...(parsed.itemName ? { itemName: parsed.itemName } : {}),
-      ...(parsed.rarity === "UNIQUE" && parsed.itemName ? { uniqueName: parsed.itemName } : {}),
-      ...(parsed.baseType ? { baseType: parsed.baseType } : {}),
-    });
-  }
-  return facts;
+    return {
+      id,
+      ...(name ? { name } : {}),
+      isActive: id === activeSetId,
+      ...(parseBoolean(attributes.useSecondWeaponSet) !== undefined
+        ? { useSecondWeaponSet: parseBoolean(attributes.useSecondWeaponSet) }
+        : {}),
+      equippedItems,
+    };
+  });
 }
 
 interface ParsedPobItem {
@@ -491,10 +561,10 @@ function parsePassiveSpecs(
     const specCollection = collectMatches(
       /<Spec\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Spec\s*>)/gi,
       treeSection.inner,
-      MAX_SKILL_GROUPS,
+      MAX_BUILD_SETS,
     );
     matches = specCollection.matches;
-    if (specCollection.truncated) warnings.push(`Passive spec parsing stopped at ${MAX_SKILL_GROUPS} specs.`);
+    if (specCollection.truncated) warnings.push(`Passive spec parsing stopped at ${MAX_BUILD_SETS} specs.`);
   } else {
     // Older saves can expose a single Spec directly as a root-level section.
     const selected = /<Spec\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Spec\s*>)/i.exec(xml);

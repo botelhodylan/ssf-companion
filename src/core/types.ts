@@ -68,7 +68,7 @@ export interface BuildGemFact {
 }
 
 export interface BuildSkillGroup {
-  /** One-based order inside the selected active SkillSet. */
+  /** One-based order inside its source SkillSet. */
   readonly index: number;
   readonly label?: string;
   readonly socketedIn?: string;
@@ -92,6 +92,14 @@ export interface BuildSkillSummary {
   readonly groups: readonly BuildSkillGroup[];
 }
 
+/** One named PoB skill-set loadout; only the active set has a selected main group. */
+export interface BuildSkillSetFact {
+  readonly id: number;
+  readonly name?: string;
+  readonly isActive: boolean;
+  readonly groups: readonly BuildSkillGroup[];
+}
+
 export interface EquippedItemFact {
   readonly slotName: string;
   readonly itemId: string;
@@ -101,6 +109,15 @@ export interface EquippedItemFact {
   readonly itemName?: string;
   readonly uniqueName?: string;
   readonly baseType?: string;
+}
+
+/** One named PoB gear loadout. Items refer only to item records in that set. */
+export interface BuildEquipmentSetFact {
+  readonly id: number;
+  readonly name?: string;
+  readonly isActive: boolean;
+  readonly useSecondWeaponSet?: boolean;
+  readonly equippedItems: readonly EquippedItemFact[];
 }
 
 /** A single saved tree in a PoB export. Node IDs are preserved as source facts. */
@@ -132,8 +149,12 @@ export interface BuildManifest {
   };
   /** Summarized from the active PoB skill set; no damage calculation is done. */
   readonly skills?: BuildSkillSummary;
+  /** Every imported PoB skill set, including inactive alternatives. */
+  readonly skillSets?: readonly BuildSkillSetFact[];
   /** Facts from the active PoB item set, without importing item modifiers. */
   readonly equippedItems?: readonly EquippedItemFact[];
+  /** Every imported PoB item set, including inactive alternatives. */
+  readonly equipmentSets?: readonly BuildEquipmentSetFact[];
   /** Count of unique numeric node IDs stored in the active PoB Spec. */
   readonly passiveAllocationCount?: number;
   /** Named passive specs from the export; this does not rank or simulate nodes. */

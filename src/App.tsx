@@ -872,6 +872,7 @@ export default function App() {
     const equippedItems = selectedBuild?.equippedItems ?? [];
     const hasManifestDetails = Boolean(selectedBuild && (
       selectedBuild.skills || selectedBuild.equippedItems?.length ||
+      selectedBuild.skillSets?.length || selectedBuild.equipmentSets?.length ||
       selectedBuild.passiveAllocationCount !== undefined || selectedBuild.parseWarnings?.length
     ));
 
@@ -916,6 +917,52 @@ export default function App() {
                   <div><span>Support gems</span><strong>{skillSummary?.supportGemNames.length ? skillSummary.supportGemNames.join(", ") : "Not detected"}</strong></div>
                   <div><span>Equipped items</span><strong>{equippedItems.length ? equippedItems.map((item) => `${item.slotName}: ${item.uniqueName ?? item.itemName ?? item.baseType ?? "Item"}`).join(" · ") : "Not detected"}</strong></div>
                   <div><span>Passive allocation</span><strong>{selectedBuild.passiveAllocationCount === undefined ? "Not detected" : `${selectedBuild.passiveAllocationCount} unique nodes`}</strong></div>
+                  {selectedBuild.equipmentSets?.length ? (
+                    <div className="build-details-full">
+                      <span>Gear setups ({selectedBuild.equipmentSets.length})</span>
+                      <ul className="build-loadout-list">
+                        {selectedBuild.equipmentSets.map((set) => (
+                          <li key={`gear-set-${set.id}`}>
+                            <div className="build-set-heading">
+                              <strong>{set.name ?? `Gear set ${set.id}`}</strong>
+                              <span className={set.isActive ? "build-set-state is-active" : "build-set-state"}>{set.isActive ? "ACTIVE" : "ALTERNATIVE"}</span>
+                              {set.useSecondWeaponSet && <small>Second weapon set</small>}
+                            </div>
+                            <p>{set.equippedItems.length ? set.equippedItems.map((item) => `${item.slotName}: ${item.uniqueName ?? item.itemName ?? item.baseType ?? "Item"}`).join(" · ") : "No equipped item slots found."}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {selectedBuild.skillSets?.length ? (
+                    <div className="build-details-full">
+                      <span>Skill setups ({selectedBuild.skillSets.length})</span>
+                      <p className="build-set-caveat">The active PoB setup is marked below. Inactive setups are retained as imported; their main skill is not guessed.</p>
+                      <ul className="build-loadout-list">
+                        {selectedBuild.skillSets.map((set) => (
+                          <li key={`skill-set-${set.id}`}>
+                            <div className="build-set-heading">
+                              <strong>{set.name ?? `Skill set ${set.id}`}</strong>
+                              <span className={set.isActive ? "build-set-state is-active" : "build-set-state"}>{set.isActive ? "ACTIVE" : "ALTERNATIVE"}</span>
+                            </div>
+                            {set.groups.length ? (
+                              <ul className="build-group-list">
+                                {set.groups.map((group) => (
+                                  <li key={`${set.id}-${group.index}`}>
+                                    <span>
+                                      {group.label ?? group.mainSkillName ?? `Group ${group.index}`}
+                                      {group.isMainSkillGroup && <small className="build-main-group-tag">Main group</small>}
+                                    </span>
+                                    <p>{group.gems.map((gem) => gem.name).filter(Boolean).join(" · ") || "Gem names not recorded"}</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : <p>No skill groups found.</p>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {selectedBuild.parseWarnings?.map((warning) => <p className="build-parse-warning" key={warning}>{warning}</p>)}
                 </div>
               )}

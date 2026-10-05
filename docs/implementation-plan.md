@@ -8,7 +8,7 @@
 
 ## Phase 1 — Build import and explainable loot priorities
 
-**Status: complete for the first local-first slice.** The Windows desktop app imports PoB code/XML/files and supported pobb.in/Maxroll share links, normalizes skills/equipment/goals, supports ACTIVE/NEXT/INTERESTED builds, ranks known goals, explains recommendations, and exports JSON/CSV plus a manual FilterBlade review guide. It packages as a portable Windows executable. It does not require an account.
+**Status: complete for the first local-first slice.** The Windows desktop app imports PoB code/XML/files and supported pobb.in/Maxroll share links, normalizes skills/equipment/goals, supports ACTIVE/NEXT/INTERESTED builds, ranks known goals, explains recommendations, and exports JSON/CSV plus a manual FilterBlade review guide. It preserves and displays every named PoB skill and equipment set with the active selection marked; alternate sets are not assigned a guessed transition order. It packages as an unsigned portable Windows executable. It does not require an account.
 
 ## Phase 2 — Progression route foundation
 

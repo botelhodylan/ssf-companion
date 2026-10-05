@@ -48,7 +48,7 @@ After GGG registration is available, account sync uses only documented OAuth res
 - PoE 1 local data model and desktop UI.
 - Import raw Path of Building share code and `.pob`/XML/text file.
 - Fetch `pobb.in` raw builds and Maxroll saved PoB build links through strict host/path allowlists. Generic Maxroll guide pages are not assumed to expose a stable build payload; explain how to copy a PoB code instead.
-- Parse a useful Build Manifest: build name, class/ascendancy where present, main skills/supports, gear/base/unique requirements, item and crafting references, passive allocation metadata where available, source, parse warnings, and confidence.
+- Parse a useful Build Manifest: build name, class/ascendancy where present, active and alternate named PoB skill/equipment sets, main skills/supports, gear/base/unique requirements, item and crafting references, passive allocation metadata where available, source, parse warnings, and confidence.
 - Store local accounts, PoE 1 leagues, characters, builds, and goals with stable IDs. Keep role and league boundaries explicit.
 - Deterministic relevance breakdown for current build, immediate upgrade opportunity, crafting use, scarcity, future build demand, progression stage, and clutter cost.
 - Manual progression stage and manual league/character contexts where OAuth is unavailable.
@@ -93,7 +93,7 @@ LocalAccount
             └── ProgressionSnapshot
 ```
 
-`BuildManifest` is the adapter boundary between sources and features. It contains normalized identity, version/game, skills, item slots/bases, required/chase uniques, craft targets/materials, named passive specs with tree versions and allocated node IDs when present, progression needs, source provenance, missing fields, and confidence. An importer must never silently convert an unknown field into a definitive requirement.
+`BuildManifest` is the adapter boundary between sources and features. It contains normalized identity, version/game, active skill/equipment summaries, all named PoB skill and equipment sets with active flags, item slots/bases, required/chase uniques, craft targets/materials, named passive specs with tree versions and allocated node IDs when present, progression needs, source provenance, missing fields, and confidence. The selected active sets feed current summaries; alternate sets remain available for future build-transition planning without an inferred order. Only the active PoB skill set is assigned the build-global main skill group because inactive sets do not carry an independently selected main group. An importer must never silently convert an unknown field into a definitive requirement.
 
 V1 stores versioned records in Electron's local renderer storage under the user's local app profile. The current slice names each league, character, build, goal, and selected-context key with a `v1` schema marker; schema migration and backup/restore are a Phase 2 hardening task. The profile root is the local account context, so no separate account record or sign-in is needed. A later migration can move to a main-process JSON store or SQLite without changing the core manifest. OAuth tokens, if ever added, belong in OS-protected storage and never in renderer localStorage or exported manifests.
 
@@ -101,8 +101,8 @@ V1 stores versioned records in Electron's local renderer storage under the user'
 
 | Input | V1 behavior | Evidence and limits |
 |---|---|---|
-| Path of Building code | Decode URL-safe Base64 + zlib payload, parse XML, normalize to the manifest, and surface parser warnings. | Path of Building's own build import tooling describes its provider URL mappings and raw endpoints. |
-| `.pob`, XML, or text file | User selects a local file; content is size-limited and parsed locally. | No game directory is read. |
+| Path of Building code | Decode URL-safe Base64 + zlib payload, parse XML, normalize all named skill/item sets and passive specs, and surface parser warnings. | The selected sets are marked active; alternate sets are retained as source facts and aren't treated as a progression sequence. |
+| `.pob`, XML, or text file | User selects a local file; content is size-limited and parsed locally. | No game directory is read. The same all-set preservation applies. |
 | `pobb.in` link | Normalize only supported public-link shapes and fetch the documented raw endpoint. Attach a configurable maintainer contact to the User-Agent. | Pobb.in documents `/<id>/raw` and `/u/<username>/<id>/raw`, and asks integrations to identify the app and provide contact information. |
 | Maxroll PoB share URL | Support `/poe/pob/<id>` by requesting Maxroll's current raw build endpoint used by Path of Building. | A generic guide URL is not treated as equivalent to a saved PoB link; fallback is paste/import the code. |
 
