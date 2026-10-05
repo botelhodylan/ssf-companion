@@ -21,6 +21,7 @@ import type { BuildManifest, BuildRole, ItemGoal, ProgressionStage } from "./cor
 import { normalizeBuildInput } from "./core/build-import";
 import { buildProgressionRoute, type ProgressionRouteStep } from "./core/progression-route";
 import { auditFilterBladeFile, type FilterBladeAudit } from "./core/filterblade-audit";
+import { attachFilterBladeCustomizerNames, parseFilterBladeCustomizerOptions, type FilterBladeCustomizerOptions } from "./core/filterblade-options";
 import { parsePassiveTreeExport, type PassiveTreeDataset } from "./core/passive-tree-data";
 import type { AtlasTreeDataset, AtlasTreeImport, SavedAtlasTree } from "./core/atlas-tree-import";
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
@@ -174,6 +175,8 @@ export default function App() {
   const [filterAudit, setFilterAudit] = useState<{ audit: FilterBladeAudit; planKey: string } | null>(null);
   const [filterAuditModalOpen, setFilterAuditModalOpen] = useState(false);
   const [filterAuditImporting, setFilterAuditImporting] = useState(false);
+  const [filterBladeOptions, setFilterBladeOptions] = useState<FilterBladeCustomizerOptions | null>(null);
+  const [filterBladeOptionsImporting, setFilterBladeOptionsImporting] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [importInput, setImportInput] = useState("");
   const [importing, setImporting] = useState(false);
@@ -189,6 +192,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const passiveTreeFileInputRef = useRef<HTMLInputElement>(null);
   const filterFileInputRef = useRef<HTMLInputElement>(null);
+  const filterBladeOptionsInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void window.ssfDesktop?.getAppVersion().then(setAppVersion).catch(() => undefined);
@@ -285,6 +289,11 @@ export default function App() {
     builds: buildsForScoring.map((build) => ({ id: build.id, role: build.role, goals: build.itemGoals })),
     targets: rows.map((row) => ({ item: row.candidate.name, baseType: row.candidate.baseType ?? null })),
   }), [currentStage, buildsForScoring, rows]);
+  const currentFilterAudit = filterAudit?.planKey === filterAuditPlanKey ? filterAudit.audit : undefined;
+  const filterAuditWithCustomizer = useMemo(() => currentFilterAudit && filterBladeOptions
+    ? attachFilterBladeCustomizerNames(currentFilterAudit, filterBladeOptions)
+    : currentFilterAudit,
+  [currentFilterAudit, filterBladeOptions]);
 
   useEffect(() => {
     setFilterAudit(null);
@@ -564,6 +573,44 @@ export default function App() {
     }
   }
 
+  function acceptFilterBladeOptionsFile(file: { name: string; content: string }) {
+    try {
+      const options = parseFilterBladeCustomizerOptions(file.content, file.name);
+      setFilterBladeOptions(options);
+      setToast(`Indexed ${options.indexedRuleCount.toLocaleString()} FilterBlade Customizer rule labels.`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The FilterBlade options file could not be read.");
+    }
+  }
+
+  async function openFilterBladeOptions() {
+    if (window.ssfDesktop) {
+      setFilterBladeOptionsImporting(true);
+      try {
+        const file = await window.ssfDesktop.openFilterBladeOptionsFile();
+        if (file) acceptFilterBladeOptionsFile(file);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "The FilterBlade options file could not be opened.");
+      } finally {
+        setFilterBladeOptionsImporting(false);
+      }
+      return;
+    }
+    filterBladeOptionsInputRef.current?.click();
+  }
+
+  async function browserFilterBladeOptionsFileChosen(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1_000_000) {
+      notify("That FilterBlade options file is too large to index safely.");
+      event.target.value = "";
+      return;
+    }
+    acceptFilterBladeOptionsFile({ name: file.name, content: await file.text() });
+    event.target.value = "";
+  }
+
   async function openFilterAudit() {
     if (!rows.length) {
       notify("Import or select a build before auditing a FilterBlade export.");
@@ -662,8 +709,7 @@ export default function App() {
         relevance: row.relevance,
       })),
     });
-    const currentFilterAudit = filterAudit?.planKey === filterAuditPlanKey ? filterAudit.audit : undefined;
-    const content = serializePriorityPlan(plan, format, currentFilterAudit);
+    const content = serializePriorityPlan(plan, format, filterAuditWithCustomizer);
     const isHandoff = format === "markdown";
     const name = isHandoff ? "ssf-filterblade-handoff" : "ssf-priority-plan";
     if (window.ssfDesktop) {
@@ -1425,18 +1471,30 @@ export default function App() {
         </Modal>
       )}
 
-      {filterAuditModalOpen && filterAudit?.planKey === filterAuditPlanKey && (
+      {filterAuditModalOpen && filterAuditWithCustomizer && (
         <Modal title="FilterBlade rule audit" width="wide" onClose={() => setFilterAuditModalOpen(false)} footer={
-          <><button className="button button-quiet" type="button" onClick={() => setFilterAuditModalOpen(false)}>Done</button><button className="button button-primary" type="button" onClick={() => { setFilterAuditModalOpen(false); exportContent("markdown"); }}>Export handoff with audit</button></>
+          <>
+            <button className="button button-outline" type="button" onClick={() => void openFilterBladeOptions()} disabled={filterBladeOptionsImporting}>
+              <FolderOpen size={14} /> {filterBladeOptionsImporting ? "Reading options…" : filterBladeOptions ? "Reload Customizer labels" : "Load Customizer labels"}
+            </button>
+            <button className="button button-quiet" type="button" onClick={() => setFilterAuditModalOpen(false)}>Done</button>
+            <button className="button button-primary" type="button" onClick={() => { setFilterAuditModalOpen(false); exportContent("markdown"); }}>Export handoff with audit</button>
+          </>
         }>
-          <div className="modal-callout filter-audit-callout"><CircleHelp size={18} /><p>This is a read-only local audit. It does not modify or upload your filter. Matches are candidate BaseType mentions: the audit lists other rule lines but does not evaluate them, and it does not open files named by Import rules. The combined handoff can include these candidate rule IDs and existing style directives for review in FilterBlade.</p></div>
+          <input ref={filterBladeOptionsInputRef} className="sr-only" type="file" accept=".options,.txt,text/plain" onChange={(event) => void browserFilterBladeOptionsFileChosen(event)} />
+          <div className="modal-callout filter-audit-callout"><CircleHelp size={18} /><p>This is a read-only local audit. It does not modify or upload your filter. Matches are candidate BaseType mentions: the audit lists other rule lines but does not evaluate them, and it does not open files named by Import rules. Optionally load FilterBlade&rsquo;s local <code>CustomizerDefault.options</code> file to add labels for exact rule IDs found in this filter.</p></div>
           <div className="filter-audit-summary">
-            <div><span>FILE</span><strong>{filterAudit.audit.sourceFile}</strong></div>
-            <div><span>ACTIVE RULES</span><strong>{filterAudit.audit.activeRuleCount.toLocaleString()}</strong></div>
-            <div><span>IMPORTS NOT FOLLOWED</span><strong>{filterAudit.audit.importCount.toLocaleString()}</strong></div>
+            <div><span>FILE</span><strong>{filterAuditWithCustomizer.sourceFile}</strong></div>
+            <div><span>ACTIVE RULES</span><strong>{filterAuditWithCustomizer.activeRuleCount.toLocaleString()}</strong></div>
+            <div><span>IMPORTS NOT FOLLOWED</span><strong>{filterAuditWithCustomizer.importCount.toLocaleString()}</strong></div>
           </div>
+          {filterAuditWithCustomizer.customizerOptions && <div className="filterblade-options-status" role="status">
+            <div><strong>Customizer labels loaded from {filterAuditWithCustomizer.customizerOptions.sourceFile}</strong><span>{filterAuditWithCustomizer.customizerOptions.indexedRuleCount.toLocaleString()} exact rule IDs indexed · {filterAuditWithCustomizer.targets.flatMap((target) => target.rules).filter((rule) => rule.customizerRule).length.toLocaleString()} candidate rule references labeled</span></div>
+            <p>Only literal QuickUI entries were read. {filterAuditWithCustomizer.customizerOptions.unmappedQuickUiCalls.toLocaleString()} generated or unsupported entries were not named; {filterAuditWithCustomizer.customizerOptions.duplicateRuleIds.length.toLocaleString()} duplicate IDs were withheld. The file does not identify the live FilterBlade version or your saved settings.</p>
+            <button className="text-link" type="button" onClick={() => void openTrustedLink("https://github.com/NeverSinkDev/FilterBlade-Public-Assets/blob/main/FbPoe1Configs/CustomizerDefault.options")}>Open the FilterBlade public options file <ExternalLink size={12} /></button>
+          </div>}
           <div className="filter-audit-targets">
-            {filterAudit.audit.targets.map((target, targetIndex) => (
+            {filterAuditWithCustomizer.targets.map((target, targetIndex) => (
               <section className="filter-audit-target" key={`${target.item}-${target.baseType ?? "unknown"}-${targetIndex}`}>
                 <header>
                   <div><strong>{target.item}</strong><span>{target.baseType ?? "Base type not available in this build goal"}</span></div>
@@ -1452,6 +1510,7 @@ export default function App() {
                       <div><strong>{rule.effect}</strong><span>Rule {rule.order} · line {rule.line}</span></div>
                       {rule.filterBladeRuleId && <code>{rule.filterBladeRuleId}</code>}
                     </div>
+                    {rule.customizerRule && <div className="filter-audit-detail filterblade-customizer-name"><span>FilterBlade Customizer control</span><strong>{rule.customizerRule.name}{rule.customizerRule.title && rule.customizerRule.title !== rule.customizerRule.name ? ` · ${rule.customizerRule.title}` : ""}</strong></div>}
                     <div className="filter-audit-detail">
                       <span>BaseType clauses</span>
                       <div className="filter-audit-code-list">
@@ -1474,7 +1533,7 @@ export default function App() {
               </section>
             ))}
           </div>
-          <ul className="filter-audit-limitations">{filterAudit.audit.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
+          <ul className="filter-audit-limitations">{filterAuditWithCustomizer.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
         </Modal>
       )}
     </div>

@@ -90,6 +90,13 @@ describe("priority plan export", () => {
       sourceFile: "NeverSink.filter",
       activeRuleCount: 12,
       importCount: 2,
+      customizerOptions: {
+        sourceFile: "CustomizerDefault.options",
+        indexedRuleCount: 355,
+        quickUiCalls: 521,
+        unmappedQuickUiCalls: 166,
+        duplicateRuleIds: [],
+      },
       limitations: ["Candidate BaseType references only."],
       targets: [{
         item: "The Taming",
@@ -110,6 +117,11 @@ describe("priority plan export", () => {
           otherRuleLines: ["Rarity Unique"],
           presentation: ["SetFontSize 40", "PlayAlertSound 5 300"],
           continues: false,
+          customizerRule: {
+            id: "uniques;tier2",
+            name: "The Taming and other Tier 2",
+            title: "Tier 2",
+          },
         }],
       }],
     });
@@ -120,5 +132,7 @@ describe("priority plan export", () => {
     expect(auditedGuide).toContain("not proof that an item will show or hide");
     expect(auditedGuide).toContain("FilterBlade candidate rules");
     expect(auditedGuide).toContain("Show rule 4 (uniques;tier2)");
+    expect(auditedGuide).toContain("literal rules indexed from CustomizerDefault.options");
+    expect(auditedGuide).toContain("FilterBlade Customizer control: The Taming and other Tier 2 · Tier 2");
   });
 });

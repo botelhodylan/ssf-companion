@@ -20,6 +20,12 @@ export interface FilterAuditRuleReference {
   readonly otherRuleLines: readonly string[];
   readonly presentation: readonly string[];
   readonly continues: boolean;
+  /** Optional exact UI label from a player-selected FilterBlade options file. */
+  readonly customizerRule?: {
+    readonly id: string;
+    readonly name: string;
+    readonly title?: string;
+  };
 }
 
 export interface FilterAuditTarget {
@@ -33,6 +39,13 @@ export interface FilterBladeAudit {
   readonly sourceFile: string;
   readonly activeRuleCount: number;
   readonly importCount: number;
+  readonly customizerOptions?: {
+    readonly sourceFile: string;
+    readonly indexedRuleCount: number;
+    readonly quickUiCalls: number;
+    readonly unmappedQuickUiCalls: number;
+    readonly duplicateRuleIds: readonly string[];
+  };
   readonly limitations: readonly string[];
   readonly targets: readonly FilterAuditTarget[];
 }
@@ -145,7 +158,7 @@ export function auditFilterBladeFile(
       const effect = header[1]?.toLowerCase() as "show" | "hide" | "minimal";
       const metadataComment = extractHeaderComment(rawLine);
       const typeTag = metadataComment.match(/\$type->([\w.-]+)/i)?.[1];
-      const tierTag = metadataComment.match(/\$tier->([\w.-]+)/i)?.[1];
+      const tierTag = metadataComment.match(/\$tier->([\w.-]+(?:;[\w.-]+)*)/i)?.[1];
       active = {
         order: rules.length + 1,
         line: index + 1,

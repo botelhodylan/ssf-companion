@@ -186,6 +186,10 @@ function serializeFilterAudit(audit: FilterBladeAudit): string[] {
     `- Local file: ${markdownText(audit.sourceFile)}`,
     `- Active rules scanned: ${audit.activeRuleCount}`,
     `- Import directives counted but not opened: ${audit.importCount}`,
+    ...(audit.customizerOptions ? [
+      `- Customizer labels: ${audit.customizerOptions.indexedRuleCount} literal rules indexed from ${markdownText(audit.customizerOptions.sourceFile)}`,
+      `- QuickUI entries that could not be named: ${audit.customizerOptions.unmappedQuickUiCalls}; duplicate IDs withheld: ${audit.customizerOptions.duplicateRuleIds.length}`,
+    ] : []),
     "",
     "The entries below are candidate literal BaseType references. They do not evaluate the full rule stack or imported files and are not proof that an item will show or hide.",
     "",
@@ -206,6 +210,12 @@ function serializeFilterAudit(audit: FilterBladeAudit): string[] {
     for (const rule of shownRules) {
       const ruleId = rule.filterBladeRuleId ? ` · FilterBlade ID \`${markdownText(rule.filterBladeRuleId)}\`` : "";
       lines.push(`  - Rule ${rule.order}, line ${rule.line}: ${rule.effect}${ruleId}${rule.continues ? " · Continue" : ""}`);
+      if (rule.customizerRule) {
+        const title = rule.customizerRule.title && rule.customizerRule.title !== rule.customizerRule.name
+          ? ` · ${rule.customizerRule.title}`
+          : "";
+        lines.push(`    - FilterBlade Customizer control: ${markdownText(rule.customizerRule.name + title)}`);
+      }
       const candidateClauses = rule.baseTypeClauses.filter((clause) => clause.mentionsTarget).slice(0, 6);
       if (candidateClauses.length) {
         lines.push(`    - BaseType candidates: ${candidateClauses.map((clause) => `\`${markdownText(clause.text)}\``).join("; ")}`);
