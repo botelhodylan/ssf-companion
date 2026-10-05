@@ -9,6 +9,7 @@ This project follows a simple release history. Changes are grouped by version; G
 - Pair each priority target with its bounded candidate NeverSink/FilterBlade rule references in the Markdown handoff, while labeling them as clues rather than effective filter outcomes.
 - Harden the disabled Windows signing workflow with SignPath configuration, binary metadata, signer-identity, and release-checksum gates.
 - Compare ACTIVE and target PoB equipment labels by slot to surface build-transition differences, while requiring live gear and item modifiers before calling any difference an upgrade.
+- Compare ACTIVE and target PoB main skill/support gem groups and identify added or removed support gems, while requiring confirmed live sockets and reviewed PoE 1 gem progression data before giving switch timing.
 - Extend the optional local PoE 1 passive-tree import with relevant node links and class starts; produce a caveated deterministic allocation traversal when matching topology is complete, without bundling GGG tree data.
 - Add an inspectable suggested passive allocation order to the progression route, seeded from retained same-version allocations or the class start and labeled partial/unavailable when topology is incomplete.
 - Keep FilterBlade exports review-only until a priority overlay can be validated against real FilterBlade output without losing existing presentation.

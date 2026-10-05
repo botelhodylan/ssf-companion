@@ -1,8 +1,8 @@
 import { poe1Provider } from "./game-provider";
 import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeDataset } from "./passive-tree-data";
-import type { BuildManifest, BuildRole, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
+import type { BuildManifest, BuildRole, BuildSkillGroup, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
 
-export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.3.0" as const;
+export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.4.0" as const;
 
 export type RouteEvidenceSource =
   | "route_rules"
@@ -16,6 +16,7 @@ export type RouteConfidence = "high" | "medium" | "low";
 export type ProgressionRouteStepKind =
   | "gear_gap"
   | "equipment_comparison"
+  | "skill_transition"
   | "crafting_plan"
   | "farming_atlas"
   | "passive_tree"
@@ -63,6 +64,16 @@ export interface EquipmentSlotComparison {
   };
 }
 
+export interface SkillTransitionComparison {
+  readonly mainSkillChanged: boolean;
+  readonly activeMainSkill?: string;
+  readonly targetMainSkill?: string;
+  readonly activeSupportGems: readonly string[];
+  readonly targetSupportGems: readonly string[];
+  readonly addedSupportGems: readonly string[];
+  readonly removedSupportGems: readonly string[];
+}
+
 export interface RouteEvidence {
   readonly source: RouteEvidenceSource;
   readonly version: string;
@@ -104,6 +115,8 @@ export interface ProgressionRouteStep {
   readonly ownedQuantity?: number;
   /** Visible item labels compared between saved ACTIVE and target PoB sets only. */
   readonly equipmentComparison?: EquipmentSlotComparison;
+  /** Main skill/support names compared between saved ACTIVE and target PoB groups. */
+  readonly skillTransition?: SkillTransitionComparison;
   /** Exact node IDs and optional names resolved from a matching local tree export. */
   readonly passiveTree?: PassiveTreeComparison;
 }
@@ -297,6 +310,13 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     routeEvidence,
     progressionEvidence,
   });
+  const skillTransitionSteps = buildSkillTransitionSteps({
+    build,
+    currentBuild,
+    dataVersion,
+    routeEvidence,
+    progressionEvidence,
+  });
 
   const craftingGoals = build.itemGoals.filter((goal) => goal.kind === "crafting").sort(compareGoals);
   const craftingSteps: Omit<ProgressionRouteStep, "order">[] = craftingGoals.map((goal) => {
@@ -424,6 +444,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
   const ordered: Omit<ProgressionRouteStep, "order">[] = [
     ...gearSteps,
     ...equipmentComparisonSteps,
+    ...skillTransitionSteps,
     ...craftingSteps,
     farmingStep,
     ...passiveSteps,
@@ -584,6 +605,117 @@ function equipmentItemSummary(item: EquippedItemFact): NonNullable<EquipmentSlot
 }
 
 function normalizeEquipmentText(value: string): string {
+  return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
+}
+
+function buildSkillTransitionSteps(input: {
+  readonly build: BuildManifest;
+  readonly currentBuild?: BuildManifest;
+  readonly dataVersion: ProgressionRouteDataVersion;
+  readonly routeEvidence: RouteEvidence;
+  readonly progressionEvidence: RouteEvidence;
+}): Omit<ProgressionRouteStep, "order">[] {
+  const { build, currentBuild, dataVersion, routeEvidence, progressionEvidence } = input;
+  if (build.role === "ACTIVE" || currentBuild?.role !== "ACTIVE" || currentBuild.id === build.id) return [];
+  const activeGroup = mainSkillGroup(currentBuild);
+  const targetGroup = mainSkillGroup(build);
+  if (!activeGroup || !targetGroup) return [];
+
+  const activeMainSkill = activeGroup.mainSkillName?.trim() || currentBuild.skills?.mainSkillName?.trim() || undefined;
+  const targetMainSkill = targetGroup.mainSkillName?.trim() || build.skills?.mainSkillName?.trim() || undefined;
+  const activeSupports = supportGemNames(activeGroup);
+  const targetSupports = supportGemNames(targetGroup);
+  const activeMainKey = normalizeGemName(activeMainSkill ?? "");
+  const targetMainKey = normalizeGemName(targetMainSkill ?? "");
+  const mainSkillChanged = Boolean(activeMainKey && targetMainKey && activeMainKey !== targetMainKey);
+  const activeSupportKeys = new Set(activeSupports.map(normalizeGemName));
+  const targetSupportKeys = new Set(targetSupports.map(normalizeGemName));
+  const addedSupportGems = targetSupports.filter((gem) => !activeSupportKeys.has(normalizeGemName(gem)));
+  const removedSupportGems = activeSupports.filter((gem) => !targetSupportKeys.has(normalizeGemName(gem)));
+  const supportListsDiffer = addedSupportGems.length > 0 || removedSupportGems.length > 0;
+  if (!mainSkillChanged && !supportListsDiffer) return [];
+  const needsGemAcquisitionData = mainSkillChanged || addedSupportGems.length > 0;
+
+  const comparison: SkillTransitionComparison = {
+    mainSkillChanged,
+    ...(activeMainSkill ? { activeMainSkill } : {}),
+    ...(targetMainSkill ? { targetMainSkill } : {}),
+    activeSupportGems: activeSupports,
+    targetSupportGems: targetSupports,
+    addedSupportGems,
+    removedSupportGems,
+  };
+  const activeSkillLabel = activeMainSkill ?? "Main skill not parsed";
+  const targetSkillLabel = targetMainSkill ?? "Main skill not parsed";
+  const requirements: RouteDataRequirement[] = [
+    {
+      category: "personal",
+      key: "confirmed_current_skill_setup",
+      description: "The ACTIVE PoB is a saved setup, not a live character sync. Confirm the current socket links, colors, and gem levels before following a transition plan.",
+    },
+  ];
+  if (needsGemAcquisitionData) {
+    requirements.push({
+      category: "curated",
+      key: "poe1_gem_unlock_and_progression",
+      description: "Versioned PoE 1 quest/vendor rewards and gem availability are needed before the planner can name when or where to acquire new skill gems.",
+    });
+  }
+  const status = routeStatus(requirements);
+  const acquisitionNote = needsGemAcquisitionData
+    ? "New-gem acquisition timing needs reviewed PoE 1 progression data."
+    : "This comparison does not determine gem acquisition requirements.";
+  const action = `The ACTIVE PoB main group uses ${activeSkillLabel}${activeSupports.length ? ` with ${activeSupports.join(", ")}` : ""}; the target PoB uses ${targetSkillLabel}${targetSupports.length ? ` with ${targetSupports.join(", ")}` : ""}. This is a saved-setup difference, not proof of the character's live sockets or gem readiness. Confirm links, colors, and gem levels before switching. ${acquisitionNote}`;
+
+  return [{
+    id: `skill-transition:${currentBuild.id}:${build.id}`,
+    kind: "skill_transition",
+    status,
+    title: "Review main skill transition",
+    action,
+    confidence: "low",
+    dataVersion,
+    evidence: [
+      routeEvidence,
+      {
+        source: "build_manifest",
+        version: `build-manifest-schema-${currentBuild.schemaVersion}`,
+        reference: currentBuild.id,
+        detail: `ACTIVE PoB main group: ${activeSkillLabel}; supports: ${activeSupports.join(", ") || "none parsed"}.`,
+      },
+      {
+        source: "build_manifest",
+        version: `build-manifest-schema-${build.schemaVersion}`,
+        reference: build.id,
+        detail: `Target PoB main group: ${targetSkillLabel}; supports: ${targetSupports.join(", ") || "none parsed"}.`,
+      },
+      progressionEvidence,
+    ],
+    requiredData: requirements,
+    target: targetSkillLabel,
+    skillTransition: comparison,
+  }];
+}
+
+function mainSkillGroup(build: BuildManifest): BuildSkillGroup | undefined {
+  return build.skills?.groups.find((group) => group.isMainSkillGroup);
+}
+
+function supportGemNames(group: BuildSkillGroup): string[] {
+  const suppliedNames = group.supportGemNames.length
+    ? group.supportGemNames
+    : group.gems.filter((gem) => gem.role === "support").flatMap((gem) => gem.name ? [gem.name] : []);
+  const seen = new Set<string>();
+  return suppliedNames.flatMap((value) => {
+    const name = value.trim();
+    const key = normalizeGemName(name);
+    if (!key || seen.has(key)) return [];
+    seen.add(key);
+    return [name];
+  });
+}
+
+function normalizeGemName(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
 }
 

@@ -78,6 +78,7 @@ const PAGE_ICONS = {
 const ROUTE_STEP_LABELS: Record<ProgressionRouteStep["kind"], string> = {
   gear_gap: "Gear goal",
   equipment_comparison: "Gear transition",
+  skill_transition: "Skill transition",
   crafting_plan: "Crafting",
   farming_atlas: "Farm & Atlas",
   passive_tree: "Character tree",
@@ -1099,6 +1100,40 @@ export default function App() {
                           </div>
                         </div>
                         <p className="equipment-comparison-note">This compares saved item labels and base types only. It does not read live character gear or compare item modifiers, so it cannot say whether one item is an upgrade.</p>
+                      </div>
+                    )}
+                    {selectedRouteStep.skillTransition && (
+                      <div className="route-inspector-section skill-transition-detail">
+                        <strong>Saved PoB main skill groups</strong>
+                        <div className="skill-transition-grid">
+                          <div>
+                            <span>ACTIVE PoB</span>
+                            <p>{selectedRouteStep.skillTransition.activeMainSkill ?? "Main skill not parsed"}</p>
+                            <b>Support gems</b>
+                            {selectedRouteStep.skillTransition.activeSupportGems.length ? (
+                              <ul>{selectedRouteStep.skillTransition.activeSupportGems.map((gem) => <li key={gem}>{gem}</li>)}</ul>
+                            ) : <small>No support gems parsed</small>}
+                          </div>
+                          <div>
+                            <span>Target PoB</span>
+                            <p>{selectedRouteStep.skillTransition.targetMainSkill ?? "Main skill not parsed"}</p>
+                            <b>Support gems</b>
+                            {selectedRouteStep.skillTransition.targetSupportGems.length ? (
+                              <ul>{selectedRouteStep.skillTransition.targetSupportGems.map((gem) => <li key={gem}>{gem}</li>)}</ul>
+                            ) : <small>No support gems parsed</small>}
+                          </div>
+                        </div>
+                        <div className="skill-transition-diff">
+                          <div>
+                            <b>Added in target</b>
+                            <p>{selectedRouteStep.skillTransition.addedSupportGems.join(", ") || "None"}</p>
+                          </div>
+                          <div>
+                            <b>Removed from ACTIVE</b>
+                            <p>{selectedRouteStep.skillTransition.removedSupportGems.join(", ") || "None"}</p>
+                          </div>
+                        </div>
+                        <p className="equipment-comparison-note">This compares gem names in saved PoB groups. It cannot confirm live socket links, colors, gem levels, or gem availability.</p>
                       </div>
                     )}
                     <div className="route-inspector-section">

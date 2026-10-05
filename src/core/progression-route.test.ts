@@ -449,6 +449,106 @@ describe("buildProgressionRoute", () => {
     ]));
   });
 
+  it("compares ACTIVE and target main-skill support gems while requiring current and reviewed gem data", () => {
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      id: "active-skill-setup",
+      role: "ACTIVE",
+      skills: {
+        activeSkillSetId: 1,
+        gemRoleMethod: "name_suffix_heuristic",
+        mainSkillName: "Winter Orb",
+        supportGemNames: ["Controlled Destruction Support", "Inspiration Support"],
+        groups: [{
+          index: 1,
+          isMainSkillGroup: true,
+          mainSkillName: "Winter Orb",
+          supportGemNames: ["Controlled Destruction Support", "Inspiration Support"],
+          gems: [],
+        }],
+      },
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      id: "target-skill-setup",
+      role: "NEXT",
+      skills: {
+        activeSkillSetId: 1,
+        gemRoleMethod: "name_suffix_heuristic",
+        mainSkillName: "Spark",
+        supportGemNames: ["Controlled Destruction Support", "Added Lightning Damage Support"],
+        groups: [{
+          index: 1,
+          isMainSkillGroup: true,
+          mainSkillName: "Spark",
+          supportGemNames: ["Controlled Destruction Support", "Added Lightning Damage Support"],
+          gems: [],
+        }],
+      },
+    };
+
+    const step = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION })
+      .steps.find((candidate) => candidate.kind === "skill_transition");
+
+    expect(step).toMatchObject({
+      status: "needs_personal_and_curated_data",
+      confidence: "low",
+      skillTransition: {
+        mainSkillChanged: true,
+        activeMainSkill: "Winter Orb",
+        targetMainSkill: "Spark",
+        activeSupportGems: ["Controlled Destruction Support", "Inspiration Support"],
+        targetSupportGems: ["Controlled Destruction Support", "Added Lightning Damage Support"],
+        addedSupportGems: ["Added Lightning Damage Support"],
+        removedSupportGems: ["Inspiration Support"],
+      },
+    });
+    expect(step?.requiredData).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "confirmed_current_skill_setup", category: "personal" }),
+      expect.objectContaining({ key: "poe1_gem_unlock_and_progression", category: "curated" }),
+    ]));
+    expect(step?.action).toContain("not proof of the character's live sockets");
+  });
+
+  it("ignores casing and ordering when ACTIVE and target main skill groups contain the same gems", () => {
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      id: "active-skill-setup",
+      role: "ACTIVE",
+      skills: {
+        gemRoleMethod: "name_suffix_heuristic",
+        supportGemNames: [],
+        groups: [{
+          index: 1,
+          isMainSkillGroup: true,
+          mainSkillName: "Winter Orb",
+          supportGemNames: ["Inspiration Support", "Controlled Destruction Support"],
+          gems: [],
+        }],
+      },
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      id: "target-skill-setup",
+      role: "NEXT",
+      skills: {
+        gemRoleMethod: "name_suffix_heuristic",
+        supportGemNames: [],
+        groups: [{
+          index: 1,
+          isMainSkillGroup: true,
+          mainSkillName: "winter orb",
+          supportGemNames: ["controlled destruction support", "inspiration support"],
+          gems: [],
+        }],
+      },
+    };
+
+    const route = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION });
+
+    expect(route.steps.some((step) => step.kind === "skill_transition")).toBe(false);
+  });
+
   it("is deterministic for identical snapshots", () => {
     const input = { build: BUILD, progression: PROGRESSION, stash: STASH } as const;
     expect(buildProgressionRoute(input)).toEqual(buildProgressionRoute(input));

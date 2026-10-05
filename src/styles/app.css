@@ -688,6 +688,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .equipment-comparison-grid span { color: #bd9c6f; font-size: 8px; font-weight: 700; letter-spacing: .08em; }
 .equipment-comparison-grid p { margin: 6px 0 0; color: #e0d6c8; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 .equipment-comparison-note { margin: 0; color: #898f8a; font-size: 9px; line-height: 1.5; }
+.skill-transition-grid, .skill-transition-diff { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.skill-transition-grid > div, .skill-transition-diff > div { min-width: 0; padding: 10px; border: 1px solid #38403f; border-radius: 4px; background: #1a2021; }
+.skill-transition-grid span { color: #bd9c6f; font-size: 8px; font-weight: 700; letter-spacing: .08em; }
+.skill-transition-grid p { margin: 6px 0 8px; color: #e0d6c8; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.skill-transition-grid b, .skill-transition-diff b { color: #aaa99f; font-size: 8px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.skill-transition-grid ul { display: flex; flex-direction: column; gap: 4px; margin: 5px 0 0; padding-left: 15px; color: #b8b8ad; font-size: 9px; line-height: 1.4; }
+.skill-transition-grid > div > small { display: block; margin-top: 5px; color: #7f8982; font-size: 9px; }
+.skill-transition-diff > div { padding: 8px 10px; }
+.skill-transition-diff p { margin: 5px 0 0; color: #d2c7b6; font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
 .route-evidence { padding-top: 9px; border-top: 1px solid #303838; }
 .route-evidence > span { color: #bd9c6f; font-size: 9px; font-weight: 600; text-transform: capitalize; }
 .route-evidence p, .route-data-gap p { margin: 5px 0 0; color: #979e98; font-size: 10px; line-height: 1.48; }
@@ -742,6 +751,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .route-context-stage { grid-column: span 2; }
   .route-tree-data { grid-template-columns: minmax(0, 1fr); }
   .equipment-comparison-grid { grid-template-columns: minmax(0, 1fr); }
+  .skill-transition-grid, .skill-transition-diff { grid-template-columns: minmax(0, 1fr); }
   .route-tree-data-controls { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   .route-step-card { grid-template-columns: 32px minmax(0,1fr) 13px; }
   .route-step-card > .route-status { grid-column: 2; justify-self: start; }
