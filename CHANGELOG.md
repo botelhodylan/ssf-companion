@@ -4,6 +4,8 @@ This project follows a simple release history. Changes are grouped by version; G
 
 ## Unreleased
 
+## 0.2.0 Preview
+
 - Create a local current-character snapshot from an explicitly ACTIVE PoB after league selection, with a reviewed name/class/level/stage and a linked copy of its imported gear, skills, and passive specs.
 - Import official PoE 1 Atlas Skill Tree share URLs, keep them with their selected league, and save/re-import local JSON snapshots; optionally load a player-selected GGG Atlas export to show node labels with a patch-version caveat.
 - Keep Windows portable builds unsigned while preserving the SSF Companion product name and version metadata.

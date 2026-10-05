@@ -1,10 +1,10 @@
 # Code signing policy
 
-SSF Companion does not currently have a trusted code-signing certificate. Do not describe a Windows build as signed until a release asset has a verified Authenticode signature.
+SSF Companion does not currently have a trusted code-signing certificate. Windows releases remain unsigned for now. Do not describe a Windows build as signed until a release asset has a verified Authenticode signature.
 
 An early-access channel can publish an explicitly tagged Windows prerelease while the executable remains unsigned. That workflow must label the release as a prerelease, verify product/version metadata and `NotSigned` Authenticode status, and publish a SHA-256 checksum. Release notes must state that Windows may show an unknown-publisher warning and describe incomplete features.
 
-Stable `v*` releases remain disabled until signing is configured. Missing signer settings must never turn the stable release workflow into an unsigned release.
+The active distribution path is an unsigned, explicitly tagged preview with verified product/version metadata, a `NotSigned` Authenticode check, and a SHA-256 checksum. The stable `v*` signing workflow stays dormant. Do not enable signing or publish a signed build unless the user changes this decision and the signer is configured; missing signer settings must never turn the stable workflow into a release.
 
 ## SignPath Foundation evaluation
 

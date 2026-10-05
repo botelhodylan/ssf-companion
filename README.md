@@ -2,7 +2,11 @@
 
 SSF Companion is a downloadable, local-first desktop companion for Path of Exile 1 Solo Self-Found players. Its goal is to turn the current character, league stash, and one or more target builds into a versioned progression route covering gear, crafting, farming, passive trees, Atlas trees, and loot-filter priorities. The current release is the build-import and loot-priority foundation for that route.
 
-This is an early, source-available build. The initial distribution target is a portable Windows `.exe`; the source uses Electron, React, and Vite so macOS/Linux packaging can be added later.
+This is an early open-source build. The initial distribution target is a portable Windows `.exe`; the source uses Electron, React, and Vite so macOS/Linux packaging can be added later.
+
+## Download
+
+The [0.2.0 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.0/SSF-Companion-0.2.0-portable.exe) is available now. Verify it with the accompanying [SHA-256 checksum](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.0/SHA256SUMS.txt). This early preview is not signed and does not yet include complete patch-versioned farming, crafting, or endgame routes.
 
 ## Current slice
 
@@ -36,11 +40,11 @@ pnpm package:win
 ```
 
 `pnpm package:win` creates a portable Windows executable in `release/`.
-Early-access Windows previews are published as unsigned GitHub prereleases with a SHA-256 checksum, so Windows may show an unknown-publisher warning. Stable `v*` releases remain gated on verified signing.
+Windows downloads are unsigned for now. The preview channel publishes a SHA-256 checksum, so Windows may show an unknown-publisher warning. The signed stable-release workflow remains dormant unless signing is requested and configured.
 
 ## Code signing policy
 
-No trusted signing service is configured yet. Stable `v*` releases remain signed-only; explicitly tagged `preview-v*` builds publish as unsigned prereleases with a SHA-256 checksum. See the [code signing policy](docs/code-signing-policy.md). Do not treat any executable as signed unless its release asset passes Authenticode verification.
+No trusted signing service is configured yet, and releases remain unsigned for now. Explicitly tagged `preview-v*` builds publish as unsigned prereleases with a SHA-256 checksum. See the [code signing policy](docs/code-signing-policy.md). Do not treat any executable as signed unless its release asset passes Authenticode verification.
 
 ## Data and privacy
 
