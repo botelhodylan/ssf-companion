@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BuildManifest } from "./types";
+import { parsePoe1RouteKnowledgePack } from "./poe1-route-pack";
 import {
   buildProgressionRoute,
   POE1_ROUTE_RULES_VERSION,
@@ -146,6 +147,76 @@ describe("buildProgressionRoute", () => {
     expect(gap?.ownedQuantity).toBeUndefined();
     expect(gap?.requiredData).toContainEqual(expect.objectContaining({ key: "poe1_item_tag_taxonomy" }));
     expect(gap?.action).toContain("does not prove an exact gear gap");
+  });
+
+  it("uses an exact-match local pack for cited farm routes, Atlas nodes, and step-by-step crafts", () => {
+    const pack = parsePoe1RouteKnowledgePack(JSON.stringify({
+      schemaVersion: 1,
+      game: "poe1",
+      id: "route-pack-test",
+      name: "Test route pack",
+      contentVersion: "3.28.0",
+      sources: [{ id: "wiki", title: "Example source", url: "https://example.org/route", checkedOn: "2026-10-05" }],
+      acquisitionRoutes: [{
+        id: "taming-card-route",
+        match: { itemNames: ["The Taming"] },
+        stage: "atlas",
+        method: "divination_card",
+        title: "Collect the card set",
+        steps: ["Run the named map."],
+        atlasTreeName: "Card Atlas",
+        atlasNodeNames: ["Card Chance"],
+        atlasShareUrl: "https://www.pathofexile.com/atlas-skill-tree/AAAABgAAAfdPAAA=",
+        sourceIds: ["wiki"],
+      }],
+      craftPlans: [{
+        id: "mask-craft-plan",
+        match: { baseTypes: ["Torturer's Mask"] },
+        stage: "early_mapping",
+        title: "Life and resistance helmet",
+        baseType: "Torturer's Mask",
+        requiredItemLevel: 75,
+        prerequisites: ["Unlock the crafting bench."],
+        materials: [{ name: "Orb of Alteration", quantity: 4 }],
+        steps: ["Apply the named currency.", "Inspect the result."],
+        stopCondition: "Stop after the target modifiers roll.",
+        sourceIds: ["wiki"],
+      }],
+    }));
+    const route = buildProgressionRoute({ build: BUILD, progression: PROGRESSION, stash: STASH, routeKnowledgePack: pack });
+    const craft = route.steps.find((step) => step.goalId === "goal-helmet-base" && step.kind === "crafting_plan");
+    const farm = route.steps.find((step) => step.goalId === "goal-ring" && step.kind === "farming_atlas");
+
+    expect(route.dataVersion.curatedData).toBe("route-pack-test@3.28.0");
+    expect(craft).toMatchObject({
+      status: "ready",
+      knowledgePlan: {
+        heading: "Life and resistance helmet",
+        stage: "early_mapping",
+        baseType: "Torturer's Mask",
+        requiredItemLevel: 75,
+        materials: [{ name: "Orb of Alteration", quantity: 4, ownedQuantity: 15 }],
+        steps: ["Apply the named currency.", "Inspect the result."],
+        stopCondition: "Stop after the target modifiers roll.",
+      },
+    });
+    expect(craft?.evidence).toContainEqual(expect.objectContaining({
+      source: "route_knowledge_pack",
+      url: "https://example.org/route",
+    }));
+    expect(farm).toMatchObject({
+      status: "ready",
+      title: "Target divination card: Collect the card set",
+      knowledgePlan: {
+        heading: "Collect the card set",
+        atlasTreeName: "Card Atlas",
+        atlasNodeNames: ["Card Chance"],
+        atlasShareUrl: "https://www.pathofexile.com/atlas-skill-tree/AAAABgAAAfdPAAA=",
+        steps: ["Run the named map."],
+      },
+    });
+    expect(route.steps.filter((step) => step.kind === "farming_atlas")).toHaveLength(2);
+    expect(route.steps.find((step) => step.kind === "farming_atlas" && !step.goalId)?.action).toContain("Torturer's Mask");
   });
 
   it("compares saved target PoB specs with the ACTIVE tree only when versions match", () => {

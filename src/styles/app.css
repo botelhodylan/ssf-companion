@@ -792,6 +792,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .route-evidence { padding-top: 9px; border-top: 1px solid #303838; }
 .route-evidence > span { color: #bd9c6f; font-size: 9px; font-weight: 600; text-transform: capitalize; }
 .route-evidence p, .route-data-gap p { margin: 5px 0 0; color: #979e98; font-size: 10px; line-height: 1.48; }
+.route-evidence-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; padding: 0; font-size: 9px; }
+.route-knowledge-plan { padding: 12px; border: 1px solid #3b433d; border-radius: 4px; background: #1b2220; }
+.route-knowledge-plan > span { color: #a4b29b; font-size: 9px; }
+.route-knowledge-plan p { margin: 0; color: #a9ada4; font-size: 10px; line-height: 1.5; }
+.route-knowledge-plan b, .route-knowledge-plan > div > b { color: #d0c4b1; font-size: 9px; }
+.route-knowledge-plan ul, .route-knowledge-plan ol { display: flex; flex-direction: column; gap: 5px; margin: 5px 0 0; padding-left: 18px; color: #a9ada4; font-size: 10px; line-height: 1.48; }
 .route-evidence code, .route-version-detail code { display: block; overflow-wrap: anywhere; margin-top: 5px; color: #8c958d; font: 9px/1.5 "Cascadia Code", Consolas, monospace; }
 .passive-node-id-list { margin-top: 8px; color: #a7aaa2; font-size: 9px; line-height: 1.5; }
 .passive-node-id-list summary { color: #c7a16f; cursor: pointer; }

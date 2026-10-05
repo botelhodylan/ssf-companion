@@ -38,6 +38,8 @@
 
 ## Phase 4 — Patch-versioned PoE 1 knowledge packs
 
+**Partially delivered:** The desktop app imports a bounded local JSON pack for exact item/base acquisition routes and craft plans. Each entry must cite HTTPS sources; Atlas setups must include a valid official GGG share URL. The route displays the pack patch, steps, materials, stop conditions, Atlas node labels, and source links. No gameplay knowledge pack is bundled yet; detailed recommendations remain unavailable until sourced data has been curated and its reuse terms checked.
+
 - Define an auditable source format for items, bases, gems, recipes, vendors, quests, drop sources, divination cards, bosses, league mechanics, Atlas nodes, and skill-tree nodes.
 - Pin each pack to a PoE patch/content version, preserve upstream sources/licenses and reviewed timestamps, and make stale data visible.
 - Treat GGG's public skill-tree export as player-supplied local data unless GGG provides redistribution terms; the export itself does not declare its patch version.

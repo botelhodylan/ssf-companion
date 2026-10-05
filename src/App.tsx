@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import type { BuildManifest, BuildRole, EquippedItemFact, EquipmentItemDetailFacts, ItemGoal, ProgressionStage } from "./core/types";
 import { normalizeBuildInput } from "./core/build-import";
-import { buildProgressionRoute, type ProgressionRouteStep } from "./core/progression-route";
+import { buildProgressionRoute, POE1_ROUTE_RULES_VERSION, type ProgressionRouteStep } from "./core/progression-route";
 import { auditFilterBladeFile, type FilterBladeAudit } from "./core/filterblade-audit";
 import { attachFilterBladeCustomizerNames, parseFilterBladeCustomizerOptions, type FilterBladeCustomizerOptions } from "./core/filterblade-options";
 import { fetchPublicFilterBladeOptions } from "./core/filterblade-public-options";
@@ -30,6 +30,7 @@ import type { AtlasTreeDataset, AtlasTreeImport, SavedAtlasTree } from "./core/a
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
 import { rankItemsByRelevance } from "./core/relevance";
 import { shouldShowSampleBuilds } from "./core/sample-mode";
+import { parsePoe1RouteKnowledgePack } from "./core/poe1-route-pack";
 import { AccountSyncStrip } from "./components/AccountSyncStrip";
 import { AtlasTreesPage } from "./components/AtlasTreesPage";
 import { ExplanationPanel } from "./components/ExplanationPanel";
@@ -70,6 +71,7 @@ const STORAGE = {
   passiveTreeData: "ssf-companion:passive-tree-data:v1",
   atlasTrees: "ssf-companion:atlas-trees:v1",
   atlasTreeData: "ssf-companion:atlas-tree-data:v1",
+  routeKnowledgePack: "ssf-companion:route-knowledge-pack:v1",
 };
 
 const ROLE_LABELS: readonly BuildRole[] = ["ACTIVE", "NEXT", "INTERESTED"];
@@ -218,6 +220,15 @@ export default function App() {
   const [passiveTreeData, setPassiveTreeData] = useStoredValue<PassiveTreeDataset | null>(STORAGE.passiveTreeData, null);
   const [savedAtlasTrees, setSavedAtlasTrees] = useStoredValue<SavedAtlasTree[]>(STORAGE.atlasTrees, []);
   const [atlasTreeDataset, setAtlasTreeDataset] = useStoredValue<AtlasTreeDataset | null>(STORAGE.atlasTreeData, null);
+  const [storedRouteKnowledgePack, setRouteKnowledgePack] = useStoredValue<unknown>(STORAGE.routeKnowledgePack, null);
+  const routeKnowledgePack = useMemo(() => {
+    if (!storedRouteKnowledgePack) return null;
+    try {
+      return parsePoe1RouteKnowledgePack(JSON.stringify(storedRouteKnowledgePack));
+    } catch {
+      return null;
+    }
+  }, [storedRouteKnowledgePack]);
   const [sessionBuilds, setSessionBuilds] = useState<BuildManifest[]>([]);
   const [roleTab, setRoleTab] = useState<BuildRole>("ACTIVE");
   const [selectedBuildId, setSelectedBuildId] = useState("");
@@ -250,6 +261,7 @@ export default function App() {
   const [appVersion, setAppVersion] = useState("Source preview");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const passiveTreeFileInputRef = useRef<HTMLInputElement>(null);
+  const routeKnowledgePackFileInputRef = useRef<HTMLInputElement>(null);
   const filterFileInputRef = useRef<HTMLInputElement>(null);
   const filterBladeOptionsInputRef = useRef<HTMLInputElement>(null);
 
@@ -313,6 +325,7 @@ export default function App() {
       build: selectedBuild,
       currentBuild: visibleBuilds.find((build) => build.role === "ACTIVE"),
       passiveTreeData,
+      routeKnowledgePack,
       progression: {
         stage,
         source,
@@ -320,7 +333,7 @@ export default function App() {
         ...(selectedCharacter?.level ? { characterLevel: selectedCharacter.level } : {}),
       },
     });
-  }, [selectedBuild, visibleBuilds, selectedCharacter, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData]);
+  }, [selectedBuild, visibleBuilds, selectedCharacter, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData, routeKnowledgePack]);
   const selectedRouteStep = progressionRoute?.steps.find((step) => step.id === selectedRouteStepId)
     ?? progressionRoute?.steps[0];
 
@@ -687,6 +700,24 @@ export default function App() {
       return;
     }
     importPassiveTreeFile({ name: file.name, content: await file.text() });
+    event.target.value = "";
+  }
+
+  async function browserRouteKnowledgePackChosen(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1_500_000) {
+      notify("That route knowledge pack exceeds the 1.5 MB import limit.");
+      event.target.value = "";
+      return;
+    }
+    try {
+      const pack = parsePoe1RouteKnowledgePack(await file.text());
+      setRouteKnowledgePack(pack);
+      notify(`Loaded ${pack.name} for PoE ${pack.contentVersion}. Review its sources before using any route.`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The route knowledge pack could not be imported.");
+    }
     event.target.value = "";
   }
 
@@ -1267,7 +1298,7 @@ export default function App() {
               <h1>Progression route</h1>
               <p>One ordered plan for the build, with each step tied to your data or a versioned game rule.</p>
             </div>
-            <span className="route-version-badge"><RouteIcon size={14} /> Local route rules · v1</span>
+            <span className="route-version-badge"><RouteIcon size={14} /> Local route rules · {POE1_ROUTE_RULES_VERSION.replace("poe1-route-", "")}</span>
           </div>
         </header>
 
@@ -1327,6 +1358,25 @@ export default function App() {
               </div>
               <input ref={passiveTreeFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserPassiveTreeFileChosen(event)} />
               <p className="route-tree-data-note">The app stores only relevant PoB node labels and links on this device. It does not include GGG tree data in the installer.</p>
+            </section>
+
+            <section className="route-tree-data route-pack-data" aria-label="PoE 1 route knowledge pack">
+              <div className="route-tree-data-copy">
+                <span className="section-kicker">PATCH-VERSIONED CONTENT</span>
+                <strong>Import a PoE 1 route knowledge pack</strong>
+                <p>Exact item and base matches can provide cited farm routes, Atlas node names, and step-by-step crafts. Packs stay local; review their patch and source links before acting.</p>
+              </div>
+              <div className="route-tree-data-controls">
+                <button className="button button-outline" type="button" onClick={() => routeKnowledgePackFileInputRef.current?.click()}>Import route data</button>
+                {routeKnowledgePack && (
+                  <div className="route-tree-data-status" role="status">
+                    <span>{routeKnowledgePack.name} · PoE {routeKnowledgePack.contentVersion} · {routeKnowledgePack.acquisitionRoutes.length} acquisition routes · {routeKnowledgePack.craftPlans.length} craft plans · {routeKnowledgePack.sources.length} sources</span>
+                    <button className="text-link" type="button" onClick={() => setRouteKnowledgePack(null)}>Clear</button>
+                  </div>
+                )}
+              </div>
+              <input ref={routeKnowledgePackFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserRouteKnowledgePackChosen(event)} />
+              <p className="route-tree-data-note">No farming or crafting data is bundled until its patch and reuse terms can be verified. Routes are generated only from exact item/base matches and retain their source links.</p>
             </section>
 
             <div className="route-layout">
@@ -1470,12 +1520,27 @@ export default function App() {
                         <p className="equipment-comparison-note">This compares gem names in saved PoB groups. It cannot confirm live socket links, colors, gem levels, or gem availability.</p>
                       </div>
                     )}
+                    {selectedRouteStep.knowledgePlan && (
+                      <div className="route-inspector-section route-knowledge-plan">
+                        <strong>{selectedRouteStep.knowledgePlan.heading}</strong>
+                        <span>Pack stage: {formatStage(selectedRouteStep.knowledgePlan.stage)}</span>
+                        {selectedRouteStep.knowledgePlan.baseType && <p><b>Craft base:</b> {selectedRouteStep.knowledgePlan.baseType}{selectedRouteStep.knowledgePlan.requiredItemLevel ? ` · item level ${selectedRouteStep.knowledgePlan.requiredItemLevel}+` : ""}</p>}
+                        {selectedRouteStep.knowledgePlan.atlasTreeName && <p><b>Atlas setup:</b> {selectedRouteStep.knowledgePlan.atlasTreeName}</p>}
+                        {selectedRouteStep.knowledgePlan.atlasNodeNames?.length ? <p><b>Atlas nodes:</b> {selectedRouteStep.knowledgePlan.atlasNodeNames.join(", ")}</p> : null}
+                        {selectedRouteStep.knowledgePlan.atlasShareUrl && <button className="text-link route-evidence-link" type="button" onClick={() => void openTrustedLink(selectedRouteStep.knowledgePlan!.atlasShareUrl!)}>Open Atlas tree share <ExternalLink size={12} /></button>}
+                        {selectedRouteStep.knowledgePlan.prerequisites?.length ? <div><b>Prerequisites</b><ul>{selectedRouteStep.knowledgePlan.prerequisites.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></div> : null}
+                        {selectedRouteStep.knowledgePlan.materials?.length ? <div><b>Materials</b><ul>{selectedRouteStep.knowledgePlan.materials.map((item) => <li key={item.name}>{item.name} × {item.quantity}{item.ownedQuantity !== undefined ? ` · owned ${item.ownedQuantity} · need ${Math.max(0, item.quantity - item.ownedQuantity)} more` : " · stash quantity unknown"}</li>)}</ul></div> : null}
+                        {selectedRouteStep.knowledgePlan.steps.length ? <div><b>Steps</b><ol>{selectedRouteStep.knowledgePlan.steps.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ol></div> : null}
+                        {selectedRouteStep.knowledgePlan.stopCondition && <p><b>Stop condition:</b> {selectedRouteStep.knowledgePlan.stopCondition}</p>}
+                      </div>
+                    )}
                     <div className="route-inspector-section">
                       <strong>Evidence</strong>
                       {selectedRouteStep.evidence.map((item, index) => (
                         <div className="route-evidence" key={`${item.source}-${item.reference ?? index}`}>
                           <span>{item.source.replaceAll("_", " ")} · {item.version}</span>
                           <p>{item.detail}</p>
+                          {item.url && <button className="text-link route-evidence-link" type="button" onClick={() => void openTrustedLink(item.url!)}>Open source <ExternalLink size={12} /></button>}
                           {item.reference && <code>{item.reference}</code>}
                         </div>
                       ))}

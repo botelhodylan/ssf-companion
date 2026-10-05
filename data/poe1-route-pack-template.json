@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "game": "poe1",
+  "id": "replace-me",
+  "name": "Replace with a reviewed PoE 1 route pack",
+  "contentVersion": "3.0.0-example",
+  "sources": [
+    {
+      "id": "replace-me",
+      "title": "Replace with a source that supports the route",
+      "url": "https://example.org/replace-me"
+    }
+  ],
+  "acquisitionRoutes": [],
+  "craftPlans": []
+}

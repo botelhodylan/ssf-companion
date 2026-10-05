@@ -5,6 +5,7 @@ This project follows a simple release history. Changes are grouped by version; G
 ## Unreleased
 
 - Keep bundled example builds out of a player profile after they create a league or character, or import a build.
+- Add a local, patch-versioned PoE 1 route pack importer for exact-match acquisition routes, Atlas share setups, and sourced step-by-step craft plans.
 
 ## 0.2.0 Preview
 

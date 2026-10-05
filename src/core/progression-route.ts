@@ -1,15 +1,17 @@
 import { poe1Provider } from "./game-provider";
 import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeDataset } from "./passive-tree-data";
+import { acquisitionRoutesForGoal, craftPlanForGoal, type Poe1RouteKnowledgePack, type Poe1RouteKnowledgePlan } from "./poe1-route-pack";
 import type { BuildManifest, BuildRole, BuildSkillGroup, EquipmentItemDetailFacts, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
 
-export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.5.0" as const;
+export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.6.0" as const;
 
 export type RouteEvidenceSource =
   | "route_rules"
   | "build_manifest"
   | "progression_snapshot"
   | "stash_snapshot"
-  | "local_tree_export";
+  | "local_tree_export"
+  | "route_knowledge_pack";
 
 export type RouteConfidence = "high" | "medium" | "low";
 
@@ -79,6 +81,7 @@ export interface RouteEvidence {
   readonly version: string;
   readonly reference?: string;
   readonly detail: string;
+  readonly url?: string;
 }
 
 export interface RouteDataRequirement {
@@ -93,8 +96,8 @@ export interface ProgressionRouteDataVersion {
   readonly buildManifestSchema: 1;
   readonly progressionSnapshot: string;
   readonly stashSnapshot: string | null;
-  /** This builder does not ship a crafting, atlas, tree, or filter dataset. */
-  readonly curatedData: "not-loaded";
+  /** "not-loaded" or the ID and patch of an imported local knowledge pack. */
+  readonly curatedData: string;
 }
 
 export interface ProgressionRouteStep {
@@ -119,6 +122,8 @@ export interface ProgressionRouteStep {
   readonly skillTransition?: SkillTransitionComparison;
   /** Exact node IDs and optional names resolved from a matching local tree export. */
   readonly passiveTree?: PassiveTreeComparison;
+  /** Exact route facts supplied by a local, version-pinned PoE 1 knowledge pack. */
+  readonly knowledgePlan?: Poe1RouteKnowledgePlan;
 }
 
 export interface RouteProgressionSnapshot {
@@ -153,6 +158,7 @@ export interface ProgressionRouteInput {
   readonly progression: RouteProgressionSnapshot;
   readonly stash?: RouteStashSnapshot | null;
   readonly passiveTreeData?: PassiveTreeDataset | null;
+  readonly routeKnowledgePack?: Poe1RouteKnowledgePack | null;
 }
 
 export interface ProgressionRoute {
@@ -186,21 +192,24 @@ function stageLabel(stage: ProgressionStage | "unknown"): string {
  * Build a deterministic PoE 1 route from supplied facts only.
  *
  * This builder never invents maps, drop sources, recipes, passive nodes, or
- * filter item classes. Those steps carry explicit curated-data requirements.
+ * filter item classes. Exact farming and craft plans come only from a loaded,
+ * patch-versioned player-selected knowledge pack.
  */
 export function buildProgressionRoute(input: ProgressionRouteInput): ProgressionRoute {
-  const { build, currentBuild, progression, stash, passiveTreeData } = input;
+  const { build, currentBuild, progression, stash, passiveTreeData, routeKnowledgePack } = input;
   const dataVersion: ProgressionRouteDataVersion = {
     routeRules: POE1_ROUTE_RULES_VERSION,
     buildManifestSchema: build.schemaVersion,
     progressionSnapshot: progression.version,
     stashSnapshot: stash?.version ?? null,
-    curatedData: "not-loaded",
+    curatedData: routeKnowledgePack ? `${routeKnowledgePack.id}@${routeKnowledgePack.contentVersion}` : "not-loaded",
   };
   const routeEvidence: RouteEvidence = {
     source: "route_rules",
     version: POE1_ROUTE_RULES_VERSION,
-    detail: "Deterministic route ordering and exact-match rules; no curated PoE 1 content database is loaded.",
+    detail: routeKnowledgePack
+      ? `Deterministic route rules with local PoE 1 pack ${routeKnowledgePack.name} (${routeKnowledgePack.contentVersion}); verify its cited sources before acting.`
+      : "Deterministic route ordering and exact-match rules; no curated PoE 1 content pack is loaded.",
   };
   const buildEvidence = (detail: string, goal?: ItemGoal): RouteEvidence => ({
     source: "build_manifest",
@@ -232,6 +241,20 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     : stash?.source === "manual"
       ? "medium"
       : "low";
+  const packEvidence = (sourceIds: readonly string[], entryId: string): RouteEvidence[] => {
+    if (!routeKnowledgePack) return [];
+    const sourceById = new Map(routeKnowledgePack.sources.map((source) => [source.id, source]));
+    return sourceIds.flatMap((sourceId) => {
+      const source = sourceById.get(sourceId);
+      return source ? [{
+        source: "route_knowledge_pack" as const,
+        version: `${routeKnowledgePack.id}@${routeKnowledgePack.contentVersion}`,
+        reference: `${entryId}/${source.id}`,
+        detail: `${source.title}${source.checkedOn ? ` (checked ${source.checkedOn})` : ""}: ${source.url}`,
+        url: source.url,
+      }] : [];
+    });
+  };
 
   const gearGoals = build.itemGoals.filter(isGearGoal).sort(compareGoals);
   const gearSteps: Omit<ProgressionRouteStep, "order">[] = gearGoals.map((goal) => {
@@ -323,20 +346,19 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     const target = goalLabel(goal);
     const ownedQuantity = stash ? countGoalMatches(goal, stash.items) : undefined;
     const targetQuantity = normalizeExplicitQuantity(goal.targetQuantity);
-    const requiredData: RouteDataRequirement[] = [
-      {
-        category: "curated",
-        key: "poe1_crafting_recipes_and_mod_pool",
-        description: "Curated PoE 1 recipe, base eligibility, and mod-pool data are needed for a safe craft sequence and material count.",
-      },
-    ];
-    if (!stash) {
-      requiredData.push({
-        category: "personal",
-        key: "league_stash_snapshot",
-        description: "A league stash snapshot is needed to report how many stated crafting inputs are already available.",
-      });
-    }
+    const craftPlan = craftPlanForGoal(goal, routeKnowledgePack);
+    const requiredData: RouteDataRequirement[] = craftPlan ? [] : [{
+      category: "curated",
+      key: "poe1_crafting_recipes_and_mod_pool",
+      description: "Import a patch-versioned PoE 1 route pack with a source-backed craft plan for this exact item or base.",
+    }];
+    if (!stash) requiredData.push({
+      category: "personal",
+      key: "league_stash_snapshot",
+      description: craftPlan
+        ? "A league stash snapshot is needed to compare the craft materials with items already owned."
+        : "A league stash snapshot is needed to report whether the target base or crafting input is already available.",
+    });
     if (reliableBuildConfidence === "low") {
       requiredData.push({
         category: "personal",
@@ -344,16 +366,36 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
         description: "Confirm the crafting target against a complete, reviewed Build Manifest.",
       });
     }
-    const status = routeStatus(requiredData);
+    const materials = craftPlan?.materials.map((material) => {
+      const ownedMaterial = stash
+        ? stash.items.filter((item) => poe1Provider.normalizeItemIdentity(item.name) === poe1Provider.normalizeItemIdentity(material.name))
+          .reduce((total, item) => total + item.quantity, 0)
+        : undefined;
+      return { ...material, ...(ownedMaterial === undefined ? {} : { ownedQuantity: ownedMaterial }) };
+    });
+    const knowledgePlan: Poe1RouteKnowledgePlan | undefined = craftPlan ? {
+      heading: craftPlan.title,
+      stage: craftPlan.stage,
+      baseType: craftPlan.baseType,
+      ...(craftPlan.requiredItemLevel ? { requiredItemLevel: craftPlan.requiredItemLevel } : {}),
+      prerequisites: craftPlan.prerequisites,
+      materials,
+      steps: craftPlan.steps,
+      stopCondition: craftPlan.stopCondition,
+    } : undefined;
+    const status = requiredData.length ? routeStatus(requiredData) : "ready";
     const stashText = stash
       ? ` The supplied snapshot records ${ownedQuantity ?? 0} matching item(s).`
       : " Stash availability is not known.";
+    const craftAction = craftPlan
+      ? `Use ${craftPlan.baseType}${craftPlan.requiredItemLevel ? ` at item level ${craftPlan.requiredItemLevel} or higher` : ""}. Follow the imported ${routeKnowledgePack?.contentVersion} sequence and stop condition; inspect the cited sources before crafting.${stash ? ` The snapshot has ${materials?.filter((material) => (material.ownedQuantity ?? 0) >= material.quantity).length ?? 0}/${materials?.length ?? 0} material types at the required counts.` : " Material availability is unknown until stash data is added."}`
+      : `Keep this declared base or input associated with the build. Do not assume an affix recipe, roll count, or expected result until a source-backed PoE 1 craft plan is imported.${stashText}`;
     return {
       id: `crafting:${goal.id}`,
       kind: "crafting_plan",
       status,
       title: `Plan crafting for ${target}`,
-      action: `Keep this declared base or input associated with the build. Do not assume an affix recipe, roll count, or expected result until curated PoE 1 crafting data is available.${stashText}`,
+      action: craftAction,
       confidence: "low",
       dataVersion,
       evidence: [
@@ -361,8 +403,10 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
         buildEvidence(`Goal ${goal.id}: ${goal.why ?? `crafting target ${target}`} (priority ${goal.priority}).`, goal),
         progressionEvidence,
         ...(stashEvidence ? [stashEvidence] : []),
+        ...(craftPlan ? packEvidence(craftPlan.sourceIds, craftPlan.id) : []),
       ],
       requiredData,
+      ...(knowledgePlan ? { knowledgePlan } : {}),
       goalId: goal.id,
       target,
       ...(targetQuantity !== undefined ? { targetQuantity } : {}),
@@ -370,11 +414,49 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     };
   });
 
-  const farmingRequiredData: RouteDataRequirement[] = [{
+  const acquisitionSteps: Omit<ProgressionRouteStep, "order">[] = gearGoals.flatMap((goal) =>
+    acquisitionRoutesForGoal(goal, routeKnowledgePack).map((route) => {
+      const requiredData: RouteDataRequirement[] = progression.stage === "unknown" ? [{
+        category: "personal",
+        key: "current_progression_stage",
+        description: "Confirm the character's progression stage before using a staged farming route.",
+      }] : [];
+      const knowledgePlan: Poe1RouteKnowledgePlan = {
+        heading: route.title,
+        stage: route.stage,
+        steps: route.steps,
+        ...(route.atlasTreeName ? { atlasTreeName: route.atlasTreeName } : {}),
+        ...(route.atlasNodeNames ? { atlasNodeNames: route.atlasNodeNames } : {}),
+        ...(route.atlasShareUrl ? { atlasShareUrl: route.atlasShareUrl } : {}),
+      };
+      return {
+        id: `farming-atlas:${goal.id}:${route.id}`,
+        kind: "farming_atlas" as const,
+        status: requiredData.length ? "needs_personal_data" as const : "ready" as const,
+        title: `Target ${route.method.replaceAll("_", " ")}: ${route.title}`,
+        action: `Use this ${route.stage} route for ${goalLabel(goal)}. The method and steps come from a local ${routeKnowledgePack?.contentVersion} pack; review the source before planning around it.`,
+        confidence: "low" as const,
+        dataVersion,
+        evidence: [
+          routeEvidence,
+          buildEvidence(`Goal ${goal.id}: ${goal.why ?? goalLabel(goal)} (priority ${goal.priority}).`, goal),
+          progressionEvidence,
+          ...packEvidence(route.sourceIds, route.id),
+        ],
+        requiredData,
+        goalId: goal.id,
+        target: goalLabel(goal),
+        knowledgePlan,
+      };
+    }),
+  );
+  const matchedAcquisitionGoalIds = new Set(acquisitionSteps.flatMap((step) => step.goalId ? [step.goalId] : []));
+  const uncoveredGearGoals = gearGoals.filter((goal) => !matchedAcquisitionGoalIds.has(goal.id));
+  const farmingRequiredData: RouteDataRequirement[] = uncoveredGearGoals.length || !gearGoals.length ? [{
     category: "curated",
     key: "poe1_atlas_routes_and_drop_sources",
-    description: "Curated map, Atlas, boss, mechanic, and drop-source data are needed before naming a farming target.",
-  }];
+    description: "Import a source-backed PoE 1 route pack for the remaining exact gear goals before naming a farm, boss, mechanic, or Atlas tree.",
+  }] : [];
   if (progression.stage === "unknown") {
     farmingRequiredData.push({
       category: "personal",
@@ -382,16 +464,16 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
       description: "Choose the character's current progression stage before ordering farm and Atlas recommendations.",
     });
   }
-  const farmingStep = makeUnknownStep({
+  const farmingStep = uncoveredGearGoals.length || !gearGoals.length ? makeUnknownStep({
     id: "farming-atlas:acquisition-plan",
     kind: "farming_atlas",
-    title: "Choose SSF farming and Atlas targets",
-    action: `Current stage: ${stageLabel(progression.stage)}. Build target stage: ${STAGE_LABEL[build.progressionStage]}. Use those as context while choosing an SSF acquisition route; this manifest does not establish a map, boss, league mechanic, or drop source.`,
+    title: "Plan remaining SSF farming and Atlas targets",
+    action: `Current stage: ${stageLabel(progression.stage)}. Build target stage: ${STAGE_LABEL[build.progressionStage]}. ${uncoveredGearGoals.length ? `No exact local acquisition route matches ${uncoveredGearGoals.map(goalLabel).join(", ")}.` : "Add exact gear targets to connect this build to acquisition routes."} The app does not infer a map, boss, league mechanic, drop source, or Atlas tree.`,
     dataVersion,
     confidence: "low",
     evidence: [routeEvidence, buildEvidence(`Manifest target progression stage is ${build.progressionStage}.`), progressionEvidence],
     requiredData: farmingRequiredData,
-  });
+  }) : undefined;
 
   const passiveSteps = buildPassiveTreeSteps({
     build,
@@ -446,7 +528,8 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     ...equipmentComparisonSteps,
     ...skillTransitionSteps,
     ...craftingSteps,
-    farmingStep,
+    ...acquisitionSteps,
+    ...(farmingStep ? [farmingStep] : []),
     ...passiveSteps,
     ...filterSteps,
   ];
