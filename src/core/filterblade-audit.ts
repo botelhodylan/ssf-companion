@@ -19,6 +19,10 @@ export interface FilterAuditRuleReference {
   readonly baseTypeClauses: readonly FilterAuditBaseTypeClause[];
   readonly otherRuleLines: readonly string[];
   readonly presentation: readonly string[];
+  /** Comment-free source body retained in memory for a reviewed style-copy export. */
+  readonly bodyLines: readonly string[];
+  /** False when the source rule body exceeded audit bounds or parser coverage. */
+  readonly bodyComplete: boolean;
   readonly continues: boolean;
   /** Optional exact UI label from a player-selected FilterBlade options file. */
   readonly customizerRule?: {
@@ -61,6 +65,8 @@ const MAX_TARGET_VALUE_COMPARISONS = 10_000_000;
 const MAX_CAPTURED_DIRECTIVES = 20;
 const MAX_CAPTURED_CONDITIONS = 30;
 const MAX_LINE_LENGTH = 260;
+const MAX_RULE_BODY_LINES = 160;
+const MAX_RULE_BODY_CHARACTERS = 32_000;
 
 const PRESENTATION_DIRECTIVES = new Set([
   "SetFontSize",
@@ -101,6 +107,9 @@ interface MutableRule {
   readonly baseTypeClauses: ParsedBaseTypeClause[];
   readonly otherRuleLines: string[];
   readonly presentation: string[];
+  readonly bodyLines: string[];
+  bodyCharacters: number;
+  bodyComplete: boolean;
   continues: boolean;
 }
 
@@ -167,11 +176,27 @@ export function auditFilterBladeFile(
         baseTypeClauses: [],
         otherRuleLines: [],
         presentation: [],
+        bodyLines: [],
+        bodyCharacters: 0,
+        bodyComplete: true,
         continues: false,
       };
       continue;
     }
     if (!active) continue;
+
+    if (
+      !uncommented ||
+      uncommented.length > MAX_LINE_LENGTH ||
+      active.bodyLines.length >= MAX_RULE_BODY_LINES ||
+      active.bodyCharacters + uncommented.length > MAX_RULE_BODY_CHARACTERS
+    ) {
+      active.bodyComplete = false;
+      coverageLimits.add(`Rule bodies above ${MAX_RULE_BODY_LINES} lines, ${MAX_RULE_BODY_CHARACTERS} characters, or ${MAX_LINE_LENGTH} characters per line cannot be copied safely.`);
+    } else {
+      active.bodyLines.push(uncommented);
+      active.bodyCharacters += uncommented.length;
+    }
 
     if (/^Continue\s*$/i.test(uncommented)) {
       active.continues = true;
@@ -184,6 +209,7 @@ export function auditFilterBladeFile(
       const parsedValues = quotedValues(baseType[2] ?? "", MAX_VALUES_PER_CLAUSE);
       if (parsedValues.truncated) {
         coverageLimits.add(`A BaseType clause with more than ${MAX_VALUES_PER_CLAUSE} values was only partially scanned.`);
+        active.bodyComplete = false;
       }
       if (parsedValues.values.length && active.baseTypeClauses.length < MAX_BASE_TYPE_CLAUSES_PER_RULE) {
         active.baseTypeClauses.push({
@@ -194,6 +220,7 @@ export function auditFilterBladeFile(
         });
       } else if (parsedValues.values.length) {
         coverageLimits.add(`Rules with more than ${MAX_BASE_TYPE_CLAUSES_PER_RULE} BaseType clauses were only partially scanned.`);
+        active.bodyComplete = false;
       }
       continue;
     }
@@ -239,6 +266,10 @@ export function auditFilterBladeFile(
           })),
           otherRuleLines: [...rule.otherRuleLines],
           presentation: [...rule.presentation],
+          // Share the bounded parsed body across matching targets instead of
+          // duplicating up to 32 KB for every target/rule reference pair.
+          bodyLines: rule.bodyLines,
+          bodyComplete: rule.bodyComplete,
           continues: rule.continues,
         });
       }

@@ -599,6 +599,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .form-two-columns > div { display: flex; flex-direction: column; gap: 8px; }
 
 .filter-audit-callout { margin-bottom: 13px; }
+.filter-copy-callout { margin-bottom: 13px; }
+.filter-copy-summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 13px; }
+.filter-copy-summary > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 9px 11px; border: 1px solid #343c3b; border-radius: 4px; background: #171c1d; }
+.filter-copy-summary span { color: #858d88; font-size: 9px; letter-spacing: .07em; }
+.filter-copy-summary strong { overflow-wrap: anywhere; color: #e3dacb; font-size: 12px; }
+.filter-copy-results { display: flex; max-height: min(52vh, 540px); flex-direction: column; gap: 8px; overflow: auto; }
+.filter-copy-target { padding: 10px 12px; border: 1px solid #363e3d; border-radius: 5px; background: #171c1d; }
+.filter-copy-target > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.filter-copy-target > header > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.filter-copy-target > header strong { color: #eee2d0; font-size: 12px; }
+.filter-copy-target > header > div > span, .filter-copy-target > p { color: #9da39d; font-size: 10px; line-height: 1.5; }
+.filter-copy-target > p { margin: 7px 0 0; }
+.filter-copy-status { flex: 0 0 auto; padding: 4px 6px; border: 1px solid #47514a; border-radius: 3px; color: #b5c19e; background: #222a23; font-size: 8px; font-weight: 700; letter-spacing: .04em; }
+.filter-copy-status.copy-skipped { border-color: #57483b; color: #d4ae82; background: #282119; }
+.filter-copy-status.copy-covered { border-color: #3e4a51; color: #a7c1d0; background: #1d252a; }
+.filter-copy-target details { margin-top: 8px; }
+.filter-copy-target details summary { color: #9da897; cursor: pointer; font-size: 10px; }
+.filter-copy-target pre { max-height: 240px; margin: 8px 0 0; padding: 10px; overflow: auto; border: 1px solid #343c3b; border-radius: 4px; color: #d9d2c4; background: #111516; font-size: 10px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .filter-audit-summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 13px; }
 .filter-audit-summary > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 9px 11px; border: 1px solid #343c3b; border-radius: 4px; background: #171c1d; }
 .filter-audit-summary span { color: #858d88; font-size: 9px; letter-spacing: .07em; }

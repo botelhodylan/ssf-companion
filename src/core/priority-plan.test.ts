@@ -116,6 +116,8 @@ describe("priority plan export", () => {
           }],
           otherRuleLines: ["Rarity Unique"],
           presentation: ["SetFontSize 40", "PlayAlertSound 5 300"],
+          bodyLines: ['BaseType "Prismatic Ring"', "Rarity Unique", "SetFontSize 40", "PlayAlertSound 5 300"],
+          bodyComplete: true,
           continues: false,
           customizerRule: {
             id: "uniques;tier2",

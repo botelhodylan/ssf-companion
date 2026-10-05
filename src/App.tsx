@@ -23,6 +23,7 @@ import { buildProgressionRoute, type ProgressionRouteStep } from "./core/progres
 import { auditFilterBladeFile, type FilterBladeAudit } from "./core/filterblade-audit";
 import { attachFilterBladeCustomizerNames, parseFilterBladeCustomizerOptions, type FilterBladeCustomizerOptions } from "./core/filterblade-options";
 import { fetchPublicFilterBladeOptions } from "./core/filterblade-public-options";
+import { createFilterBladePriorityCopy, type FilterBladePriorityCopy } from "./core/filterblade-priority-copy";
 import { parsePassiveTreeExport, type PassiveTreeDataset } from "./core/passive-tree-data";
 import type { AtlasTreeDataset, AtlasTreeImport, SavedAtlasTree } from "./core/atlas-tree-import";
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
@@ -221,9 +222,11 @@ export default function App() {
   const [progressionStageConfirmed, setProgressionStageConfirmed] = useState(false);
   const [selectedRouteStepId, setSelectedRouteStepId] = useState("");
   const [passiveTreeVersionSelection, setPassiveTreeVersionSelection] = useState("");
-  const [filterAudit, setFilterAudit] = useState<{ audit: FilterBladeAudit; planKey: string } | null>(null);
+  const [filterAudit, setFilterAudit] = useState<{ audit: FilterBladeAudit; planKey: string; sourceContent: string } | null>(null);
   const [filterAuditModalOpen, setFilterAuditModalOpen] = useState(false);
   const [filterAuditImporting, setFilterAuditImporting] = useState(false);
+  const [filterPriorityCopy, setFilterPriorityCopy] = useState<FilterBladePriorityCopy | null>(null);
+  const [filterPriorityCopySaving, setFilterPriorityCopySaving] = useState(false);
   const [filterBladeOptions, setFilterBladeOptions] = useState<FilterBladeCustomizerOptions | null>(null);
   const [filterBladeOptionsImporting, setFilterBladeOptionsImporting] = useState(false);
   const [filterBladeOptionsFetching, setFilterBladeOptionsFetching] = useState(false);
@@ -348,6 +351,7 @@ export default function App() {
   useEffect(() => {
     setFilterAudit(null);
     setFilterAuditModalOpen(false);
+    setFilterPriorityCopy(null);
   }, [filterAuditPlanKey]);
 
   useEffect(() => {
@@ -616,11 +620,16 @@ export default function App() {
         item: row.candidate.name,
         baseType: row.candidate.baseType,
       })));
-      setFilterAudit({ audit, planKey: filterAuditPlanKey });
+      setFilterAudit({ audit, planKey: filterAuditPlanKey, sourceContent: file.content });
       setFilterAuditModalOpen(true);
     } catch (error) {
       notify(error instanceof Error ? error.message : "The filter file could not be audited.");
     }
+  }
+
+  function closeFilterAudit() {
+    setFilterAuditModalOpen(false);
+    setFilterAudit(null);
   }
 
   function acceptFilterBladeOptionsFile(file: { name: string; content: string }) {
@@ -703,6 +712,58 @@ export default function App() {
     }
     acceptFilterFile({ name: file.name, content: await file.text() });
     event.target.value = "";
+  }
+
+  function previewFilterPriorityCopy() {
+    if (!filterAudit || filterAudit.planKey !== filterAuditPlanKey || !filterAuditWithCustomizer) {
+      notify("Audit the current FilterBlade export again before making a prioritized copy.");
+      return;
+    }
+    try {
+      const copy = createFilterBladePriorityCopy(
+        filterAudit.sourceContent,
+        filterAuditWithCustomizer,
+        rows.map((row) => ({
+          item: row.candidate.name,
+          baseType: row.candidate.baseType,
+          score: row.relevance.score,
+          recommendation: row.relevance.recommendation,
+        })),
+      );
+      setFilterPriorityCopy(copy);
+      setFilterAudit(null);
+      setFilterAuditModalOpen(false);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The prioritized filter copy could not be prepared.");
+    }
+  }
+
+  async function saveFilterPriorityCopy() {
+    if (!filterPriorityCopy?.content) return;
+    setFilterPriorityCopySaving(true);
+    try {
+      if (window.ssfDesktop) {
+        const result = await window.ssfDesktop.saveExport("ssf-companion-prioritized", filterPriorityCopy.content, "filter");
+        if (result.saved) {
+          notify("Saved a new prioritized filter copy. The selected source filter is unchanged.");
+          setFilterPriorityCopy(null);
+        }
+        return;
+      }
+      const blob = new Blob([filterPriorityCopy.content], { type: "text/plain" });
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = "ssf-companion-prioritized.filter";
+      anchor.click();
+      URL.revokeObjectURL(downloadUrl);
+      notify("Downloaded a new prioritized filter copy. The selected source filter is unchanged.");
+      setFilterPriorityCopy(null);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The prioritized filter copy could not be saved.");
+    } finally {
+      setFilterPriorityCopySaving(false);
+    }
   }
 
   function pinAsGoal(row: PriorityRow) {
@@ -1592,7 +1653,7 @@ export default function App() {
       )}
 
       {filterAuditModalOpen && filterAuditWithCustomizer && (
-        <Modal title="FilterBlade rule audit" width="wide" onClose={() => setFilterAuditModalOpen(false)} footer={
+        <Modal title="FilterBlade rule audit" width="wide" onClose={closeFilterAudit} footer={
           <>
             <button className="button button-outline" type="button" onClick={() => void loadPublicFilterBladeOptions()} disabled={filterBladeOptionsFetching || filterBladeOptionsImporting}>
               <ArrowDownToLine size={14} /> {filterBladeOptionsFetching ? "Loading public labels…" : filterBladeOptions ? "Refresh public labels" : "Load current public labels"}
@@ -1600,8 +1661,11 @@ export default function App() {
             <button className="button button-outline" type="button" onClick={() => void openFilterBladeOptions()} disabled={filterBladeOptionsFetching || filterBladeOptionsImporting}>
               <FolderOpen size={14} /> {filterBladeOptionsImporting ? "Reading local file…" : "Load local options file"}
             </button>
-            <button className="button button-quiet" type="button" onClick={() => setFilterAuditModalOpen(false)}>Done</button>
-            <button className="button button-primary" type="button" onClick={() => { setFilterAuditModalOpen(false); exportContent("markdown"); }}>Export handoff with audit</button>
+            <button className="button button-outline" type="button" onClick={previewFilterPriorityCopy} disabled={!filterAudit?.sourceContent}>
+              <FileCode2 size={14} /> Preview prioritized copy
+            </button>
+            <button className="button button-quiet" type="button" onClick={closeFilterAudit}>Done</button>
+            <button className="button button-primary" type="button" onClick={() => { exportContent("markdown"); closeFilterAudit(); }}>Export handoff with audit</button>
           </>
         }>
           <input ref={filterBladeOptionsInputRef} className="sr-only" type="file" accept=".options,.txt,text/plain" onChange={(event) => void browserFilterBladeOptionsFileChosen(event)} />
@@ -1657,6 +1721,37 @@ export default function App() {
             ))}
           </div>
           <ul className="filter-audit-limitations">{filterAuditWithCustomizer.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
+        </Modal>
+      )}
+
+      {filterPriorityCopy && (
+        <Modal title="Prioritized filter copy" width="wide" onClose={() => setFilterPriorityCopy(null)} footer={
+          <>
+            <button className="button button-quiet" type="button" onClick={() => setFilterPriorityCopy(null)} disabled={filterPriorityCopySaving}>Cancel</button>
+            <button className="button button-primary" type="button" onClick={() => void saveFilterPriorityCopy()} disabled={!filterPriorityCopy.content || filterPriorityCopySaving}>
+              <ArrowDownToLine size={15} /> {filterPriorityCopySaving ? "Saving…" : "Save new .filter copy"}
+            </button>
+          </>
+        }>
+          <div className="modal-callout filter-copy-callout"><CircleHelp size={18} /><p>Keep and Consider targets with complete, exact-base Show rules are prepended to a new copy. Each rule reuses the source rule&rsquo;s conditions, colors, sounds, icons, and other directives. The selected source text follows unchanged. Rules match base types and copied conditions, so the same rule can apply to other items with that base. This copy has not been validated by GGG; review it in FilterBlade&rsquo;s simulator and in game before relying on it.</p></div>
+          <div className="filter-copy-summary">
+            <div><span>SOURCE FILTER</span><strong>{filterPriorityCopy.sourceFile}</strong></div>
+            <div><span>ACTIVE SOURCE RULES</span><strong>{filterPriorityCopy.sourceRuleCount.toLocaleString()}</strong></div>
+            <div><span>NEW PRIORITY RULES</span><strong>{filterPriorityCopy.addedRuleCount.toLocaleString()}</strong></div>
+          </div>
+          {!filterPriorityCopy.addedRuleCount && <p className="filter-audit-empty">No safe priority rule could be created from this file. Targets need a complete exact-BaseType Show rule with presentation directives.</p>}
+          <div className="filter-copy-results">
+            {filterPriorityCopy.targets.map((target, index) => (
+              <article className="filter-copy-target" key={`${target.item}-${target.baseType ?? "unknown"}-${index}`}>
+                <header>
+                  <div><strong>{target.item}</strong><span>{target.baseType ?? "Base type unavailable"} · {target.recommendation.replace("_", " ")} · score {target.score}</span></div>
+                  <span className={`filter-copy-status copy-${target.status}`}>{target.status.toUpperCase()}</span>
+                </header>
+                <p>{target.reason}</p>
+                {target.block && <details><summary>Copied rule from source rule {target.sourceRuleOrder}</summary><pre><code>{target.block}</code></pre></details>}
+              </article>
+            ))}
+          </div>
         </Modal>
       )}
     </div>

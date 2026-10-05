@@ -263,15 +263,15 @@ app.whenReady().then(() => {
   ipcMain.handle("export:save", async (event, payload) => {
     assertTrustedRenderer(event);
     if (!isPlainObject(payload) || typeof payload.content !== "string" || Buffer.byteLength(payload.content, "utf8") > MAX_EXPORT_BYTES) throw new Error("The export is too large.");
-    const format = payload.format === "csv" || payload.format === "markdown" ? payload.format : "json";
+    const format = payload.format === "csv" || payload.format === "markdown" || payload.format === "filter" ? payload.format : "json";
     const extension = format === "markdown" ? "md" : format;
     const defaultName = typeof payload.name === "string" && /^[\w .-]{1,100}$/.test(payload.name)
       ? payload.name
       : "ssf-priority-plan";
     const result = await dialog.showSaveDialog({
-      title: format === "markdown" ? "Export FilterBlade handoff guide" : "Export SSF priority plan",
+      title: format === "filter" ? "Save prioritized Path of Exile filter copy" : format === "markdown" ? "Export FilterBlade handoff guide" : "Export SSF priority plan",
       defaultPath: `${defaultName}.${extension}`,
-      filters: [{ name: format === "markdown" ? "Markdown guide" : format === "csv" ? "CSV" : "JSON", extensions: [extension] }],
+      filters: [{ name: format === "filter" ? "Path of Exile item filter" : format === "markdown" ? "Markdown guide" : format === "csv" ? "CSV" : "JSON", extensions: [extension] }],
     });
     if (result.canceled || !result.filePath) return { saved: false };
     await fs.writeFile(result.filePath, payload.content, "utf8");
