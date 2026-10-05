@@ -3,6 +3,8 @@ const path = require("node:path");
 
 const workflowPath = path.join(__dirname, "..", ".github", "workflows", "release.yml");
 const workflow = fs.readFileSync(workflowPath, "utf8");
+const previewWorkflowPath = path.join(__dirname, "..", ".github", "workflows", "release-preview.yml");
+const previewWorkflow = fs.readFileSync(previewWorkflowPath, "utf8");
 const requirements = [
   ["release builds only run when SignPath is enabled", /package-and-sign:\s*\n\s*if:\s*vars\.SIGNPATH_ENABLED\s*==\s*'true'/],
   ["release builds are tag-triggered", /tags:\s*\["v\*"\]/],
@@ -27,4 +29,21 @@ const failures = requirements
   });
 
 if (failures.length) process.exitCode = 1;
-else console.log("Windows release workflow fail-closed signing checks passed.");
+else {
+  const previewRequirements = [
+    ["unsigned previews require an explicit preview tag", /tags:\s*\[\"preview-v\*\"\]/],
+    ["preview tag must exactly match package version", /RELEASE_TAG\s*-cne\s*\"preview-v\$\(\$manifest\.version\)\"/],
+    ["preview executable metadata is version-checked", /VersionInfo\.ProductName[\s\S]*?VersionInfo\.ProductVersion/],
+    ["preview refuses signed or invalidly signed binaries", /signature\.Status\s*-ne\s*\"NotSigned\"/],
+    ["preview release includes SHA-256 checksum", /Get-FileHash[\s\S]*?SHA256SUMS\.txt/],
+    ["preview publication is explicitly a prerelease", /prerelease:\s*true/],
+    ["preview release includes the portable executable", /release\/SSF-Companion-\*-portable\.exe/],
+  ];
+  const previewFailures = previewRequirements.filter(([name, pattern]) => {
+    if (pattern.test(previewWorkflow)) return false;
+    console.error(`Missing unsigned preview workflow guard: ${name}`);
+    return true;
+  });
+  if (previewFailures.length) process.exitCode = 1;
+  else console.log("Signed release gates and unsigned preview release checks passed.");
+}

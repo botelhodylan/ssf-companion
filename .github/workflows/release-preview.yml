@@ -1,0 +1,66 @@
+name: Unsigned Windows preview
+
+on:
+  push:
+    tags: ["preview-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-publish:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Check preview tag matches app version
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $manifest = Get-Content package.json -Raw | ConvertFrom-Json
+          if ($env:RELEASE_TAG -cne "preview-v$($manifest.version)") {
+            throw "Preview tag $($env:RELEASE_TAG) must equal preview-v$($manifest.version)."
+          }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm package:win
+      - name: Verify unsigned preview and create SHA-256 checksum
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $manifest = Get-Content package.json -Raw | ConvertFrom-Json
+          $assets = @(Get-ChildItem -LiteralPath "release" -Filter "SSF-Companion-*-portable.exe")
+          if ($assets.Count -ne 1) { throw "Expected exactly one portable Windows executable." }
+          $asset = $assets[0]
+          if ($asset.VersionInfo.ProductName -cne $manifest.build.productName) { throw "Portable executable product metadata does not match the app name." }
+          if ($asset.VersionInfo.ProductVersion -cne $manifest.version) { throw "Portable executable version metadata does not match package.json." }
+          if ($env:RELEASE_TAG -cne "preview-v$($manifest.version)") { throw "Portable executable metadata does not match the preview tag." }
+          $signature = Get-AuthenticodeSignature -LiteralPath $asset.FullName
+          if ($signature.Status -ne "NotSigned") { throw "Unsigned preview expected; got Authenticode status $($signature.Status)." }
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset.FullName).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath "release/SHA256SUMS.txt" -Value "$hash  $($asset.Name)" -Encoding ascii
+          Write-Host "Verified unsigned preview SHA-256: $hash"
+      - name: Publish unsigned early-access preview
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SSF Companion ${{ github.ref_name }} — unsigned preview
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            Early-access Windows desktop preview for Path of Exile 1 SSF.
+
+            This build is intentionally unsigned. Windows may show an unknown-publisher warning. Verify `SHA256SUMS.txt` before running it.
+
+            The app can import PoB/pobb.in/Maxroll builds, make a reviewed local character snapshot from an ACTIVE PoB, import Atlas share trees, analyze build-aware loot priorities, and generate a bounded FilterBlade-style filter copy. Full patch-versioned farming/crafting routes and live GGG account sync are not available yet.
+          files: |
+            release/SSF-Companion-*-portable.exe
+            release/SHA256SUMS.txt

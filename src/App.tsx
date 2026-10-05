@@ -24,6 +24,7 @@ import { auditFilterBladeFile, type FilterBladeAudit } from "./core/filterblade-
 import { attachFilterBladeCustomizerNames, parseFilterBladeCustomizerOptions, type FilterBladeCustomizerOptions } from "./core/filterblade-options";
 import { fetchPublicFilterBladeOptions } from "./core/filterblade-public-options";
 import { createFilterBladePriorityCopy, type FilterBladePriorityCopy } from "./core/filterblade-priority-copy";
+import { createPobCharacterDraft, isPobBuildSource, type PobCharacterDraft } from "./core/pob-character-draft";
 import { parsePassiveTreeExport, type PassiveTreeDataset } from "./core/passive-tree-data";
 import type { AtlasTreeDataset, AtlasTreeImport, SavedAtlasTree } from "./core/atlas-tree-import";
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
@@ -45,6 +46,8 @@ type StoredCharacter = {
   className?: string;
   level?: number;
   progressionStage: ProgressionStage;
+  /** ID of the copied PoB manifest that supplies this local character's build facts. */
+  sourceBuildId?: string;
 };
 type StoredBuild = {
   manifest: BuildManifest;
@@ -239,6 +242,8 @@ export default function App() {
   const [characterNameInput, setCharacterNameInput] = useState("");
   const [characterClassInput, setCharacterClassInput] = useState("Ranger");
   const [characterLevelInput, setCharacterLevelInput] = useState("1");
+  const [characterStageInput, setCharacterStageInput] = useState<ProgressionStage>("campaign");
+  const [characterPobDraft, setCharacterPobDraft] = useState<PobCharacterDraft | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [appVersion, setAppVersion] = useState("Source preview");
@@ -276,6 +281,7 @@ export default function App() {
   ];
   const sampleMode = !selectedCharacter && sessionBuilds.length === 0 && savedBuilds.length === 0;
   const visibleBuilds = sampleMode ? [...SAMPLE_BUILD_SET] : sessionAndSavedBuilds;
+  const activePobBuild = visibleBuilds.find((build) => build.role === "ACTIVE" && isPobBuildSource(build.source.kind));
   const passiveTreeVersionOptions = [...new Set(visibleBuilds.flatMap((build) =>
     (build.passiveSpecs ?? []).flatMap((spec) => spec.treeVersion?.trim() ? [spec.treeVersion.trim()] : []),
   ))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
@@ -375,15 +381,43 @@ export default function App() {
 
   function handleCharacterSelection(value: string) {
     if (value === "__create") {
-      setCharacterNameInput("");
-      setCharacterClassInput("Ranger");
-      setCharacterLevelInput("1");
-      setDialog("character");
+      openLocalCharacterDialog();
       return;
     }
     setSelectedCharacterId(value);
     const character = characters.find((item) => item.id === value);
     if (character) setProgressionOverride(character.progressionStage);
+  }
+
+  function openLocalCharacterDialog() {
+    setCharacterNameInput("");
+    setCharacterClassInput("Ranger");
+    setCharacterLevelInput("1");
+    setCharacterStageInput("campaign");
+    setCharacterPobDraft(null);
+    setDialog("character");
+  }
+
+  function openCharacterDialogFromActivePob() {
+    if (!selectedLeague) {
+      notify("Choose a league before importing a PoB as your current-character snapshot.");
+      return;
+    }
+    if (!activePobBuild) {
+      notify("Import a Path of Building, pobb.in, or Maxroll build and mark it ACTIVE first.");
+      return;
+    }
+    try {
+      const draft = createPobCharacterDraft(activePobBuild, selectedLeague.id);
+      setCharacterPobDraft(draft);
+      setCharacterNameInput(draft.name);
+      setCharacterClassInput(draft.className);
+      setCharacterLevelInput(draft.level === undefined ? "" : String(draft.level));
+      setCharacterStageInput(draft.progressionStage);
+      setDialog("character");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The ACTIVE PoB could not seed a character snapshot.");
+    }
   }
 
   function createLeague(event: FormEvent<HTMLFormElement>) {
@@ -404,17 +438,53 @@ export default function App() {
     const name = characterNameInput.trim();
     if (!name) return;
     const level = Number(characterLevelInput);
+    if (!Number.isInteger(level) || level < 1 || level > 100) {
+      notify("Enter a character level from 1 to 100.");
+      return;
+    }
+    const linkedSource = characterPobDraft
+      ? visibleBuilds.find((build) => build.id === characterPobDraft.sourceBuildId)
+      : undefined;
+    if (characterPobDraft && characterPobDraft.leagueId !== selectedLeagueId) {
+      notify("The selected league changed while this form was open. Reopen the PoB import from the current league.");
+      return;
+    }
+    if (characterPobDraft && (!linkedSource || linkedSource.role !== "ACTIVE" || !isPobBuildSource(linkedSource.source.kind))) {
+      notify("The source PoB changed while this form was open. Import it again and retry.");
+      return;
+    }
+    const characterId = `character-${crypto.randomUUID()}`;
+    const linkedBuild = linkedSource
+      ? { ...linkedSource, id: `build-${crypto.randomUUID()}`, role: "ACTIVE" as const }
+      : undefined;
     const character: StoredCharacter = {
-      id: `character-${crypto.randomUUID()}`,
+      id: characterId,
       leagueId: selectedLeagueId,
       name,
-      className: characterClassInput,
-      ...(Number.isInteger(level) && level > 0 ? { level } : {}),
-      progressionStage: "campaign",
+      className: characterClassInput.trim(),
+      level,
+      progressionStage: characterStageInput,
+      ...(linkedBuild ? { sourceBuildId: linkedBuild.id } : {}),
     };
     setCharacters((previous) => [...previous, character]);
+    if (linkedBuild && linkedSource) {
+      setSavedBuilds((previous) => [...previous, { manifest: linkedBuild, leagueId: selectedLeagueId, characterId }]);
+      setSavedGoals((previous) => [
+        ...previous,
+        ...previous.filter((entry) => entry.buildId === linkedSource.id).map((entry) => ({ ...entry, buildId: linkedBuild.id })),
+      ]);
+      setSessionBuilds((previous) => previous.filter((build) => build.id !== linkedSource.id));
+      setSelectedBuildId(linkedBuild.id);
+      setRoleTab("ACTIVE");
+      setPage("Progression route");
+      notify(`Created ${name} from the ACTIVE PoB as a local snapshot. Review its progression stage and imported gear before planning.`);
+    } else {
+      setPage("Overview");
+    }
     setSelectedCharacterId(character.id);
-    setProgressionOverride("campaign");
+    setProgressionOverride(characterStageInput);
+    setProgressionStageConfirmed(true);
+    setCharacterPobDraft(null);
     setDialog(null);
   }
 
@@ -1488,7 +1558,7 @@ export default function App() {
         <section className="overview-summary">
           <div><span>GAME</span><strong>Path of Exile 1</strong><small>PoE 2 is planned for a future release.</small></div>
           <div><span>LEAGUE</span><strong>{selectedLeague?.name ?? "Not selected"}</strong><small>Shared stash context belongs to this league.</small></div>
-          <div><span>CHARACTER</span><strong>{selectedCharacter?.name ?? "Not selected"}</strong><small>{selectedCharacter ? `${selectedCharacter.className ?? "PoE 1"} · ${formatStage(selectedCharacter.progressionStage)}` : "Select a league first, then create a local character."}</small></div>
+          <div><span>CHARACTER</span><strong>{selectedCharacter?.name ?? "Not selected"}</strong><small>{selectedCharacter ? `${selectedCharacter.className ?? "PoE 1"} · ${formatStage(selectedCharacter.progressionStage)}${selectedCharacter.sourceBuildId ? " · PoB snapshot" : " · local record"}` : "Select a league first, then create a local character."}</small></div>
         </section>
         <section className="overview-next-step">
           <div className="next-step-mark"><ListFilter size={20} /></div>
@@ -1507,6 +1577,7 @@ export default function App() {
           <h1>Account & local data</h1>
           <p>Your profile stays on this device. Connect an account only when the official API is available.</p>
         </header>
+        {renderContextControls()}
         <section className="account-status-card">
           <div className="account-status-icon"><UserRound size={20} /></div>
           <div className="account-status-copy">
@@ -1515,6 +1586,24 @@ export default function App() {
             <p>GGG's official character and PoE 1 stash APIs require approved OAuth access. New app registrations are currently paused, so account sync is not active in this build.</p>
           </div>
           <button className="button button-outline" type="button" onClick={() => setDialog("connect")}>Connection details</button>
+        </section>
+        <section className="settings-section active-pob-import">
+          <div>
+            <span className="section-kicker">CURRENT CHARACTER IMPORT</span>
+            <h2>Use your ACTIVE PoB as the current character</h2>
+            <p>Choose the league first, then import a Path of Building code, pobb.in link, or Maxroll PoB share and mark it ACTIVE. Review the name, class, level, and stage; the new local character will link to a copy of the imported gear sets, skill sets, and passive specs.</p>
+          </div>
+          <button className="button button-primary" type="button" onClick={openCharacterDialogFromActivePob} disabled={!selectedLeague || !activePobBuild}>
+            <UserRound size={15} /> Create character from ACTIVE PoB
+          </button>
+          <div className="settings-inline-note" role="status">
+            {!selectedLeague
+              ? "Select or create a league before adding a character."
+              : activePobBuild
+                ? `Source: ${activePobBuild.name} · ${activePobBuild.source.importState} PoB import. Review all copied fields before saving.`
+                : "No supported ACTIVE PoB is available in this profile. Import one from the Builds workspace first."}
+          </div>
+          <p className="modal-small-note">This creates a local snapshot from build data the player imported. It does not fetch live character state from GGG or prove the game character still matches the PoB.</p>
         </section>
         <section className="settings-section">
           <div>
@@ -1636,18 +1725,28 @@ export default function App() {
 
       {dialog === "character" && (
         <Modal
-          title="Add a local character"
-          onClose={() => setDialog(null)}
-          footer={<><button className="button button-quiet" type="button" onClick={() => setDialog(null)}>Cancel</button><button className="button button-primary" type="submit" form="character-form">Add character</button></>}
+          title={characterPobDraft ? "Create character from ACTIVE PoB" : "Add a local character"}
+          onClose={() => { setDialog(null); setCharacterPobDraft(null); }}
+          footer={<><button className="button button-quiet" type="button" onClick={() => { setDialog(null); setCharacterPobDraft(null); }}>Cancel</button><button className="button button-primary" type="submit" form="character-form">{characterPobDraft ? "Create local snapshot" : "Add character"}</button></>}
         >
           <form id="character-form" className="modal-form" onSubmit={createCharacter}>
+            {characterPobDraft && (
+              <div className="modal-callout">
+                <CircleHelp size={18} />
+                <p>This is a local snapshot linked to the imported {sourceLabel(characterPobDraft.sourceKind)} build. Review the fields below; the selected stage came from PoB level and may need correction. {characterPobDraft.importState === "partial" ? "The source import was partial, so inspect its parse warnings and manifest before relying on it." : "Equipment, all named skill/equipment sets, and passive specs remain in the linked build manifest."}</p>
+              </div>
+            )}
             <label htmlFor="character-name">Character name</label>
             <input id="character-name" value={characterNameInput} onChange={(event) => setCharacterNameInput(event.target.value)} placeholder="e.g., WinterOrbDyl" autoFocus maxLength={48} required />
             <div className="form-two-columns">
-              <div><label htmlFor="character-class">Class</label><select id="character-class" value={characterClassInput} onChange={(event) => setCharacterClassInput(event.target.value)}>{["Ranger", "Marauder", "Witch", "Duelist", "Templar", "Shadow", "Scion"].map((className) => <option key={className}>{className}</option>)}</select></div>
-              <div><label htmlFor="character-level">Level</label><input id="character-level" type="number" min="1" max="100" value={characterLevelInput} onChange={(event) => setCharacterLevelInput(event.target.value)} /></div>
+              <div><label htmlFor="character-class">Class</label><select id="character-class" value={characterClassInput} onChange={(event) => setCharacterClassInput(event.target.value)} required><option value="">Choose class</option>{["Ranger", "Marauder", "Witch", "Duelist", "Templar", "Shadow", "Scion"].map((className) => <option key={className}>{className}</option>)}</select></div>
+              <div><label htmlFor="character-level">Level</label><input id="character-level" type="number" min="1" max="100" value={characterLevelInput} onChange={(event) => setCharacterLevelInput(event.target.value)} required /></div>
             </div>
-            <p>Local character data is saved under <strong>{selectedLeague?.name ?? "the selected league"}</strong>. You can sync official character data later if GGG OAuth access becomes available.</p>
+            <label htmlFor="character-stage">Current progression stage · confirm</label>
+            <select id="character-stage" value={characterStageInput} onChange={(event) => setCharacterStageInput(event.target.value as ProgressionStage)}>
+              {STAGE_OPTIONS.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
+            </select>
+            <p>Saved under <strong>{selectedLeague?.name ?? "the selected league"}</strong>. PoB facts are retained as a build snapshot, not refreshed from GGG.</p>
           </form>
         </Modal>
       )}

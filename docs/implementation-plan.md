@@ -8,7 +8,7 @@
 
 ## Phase 1 — Build import and explainable loot priorities
 
-**Status: complete for the first local-first slice.** The Windows desktop app imports PoB code/XML/files and supported pobb.in/Maxroll share links, normalizes skills/equipment/goals, supports ACTIVE/NEXT/INTERESTED builds, ranks known goals, explains recommendations, and exports JSON/CSV plus a manual FilterBlade review guide. It preserves and displays every named PoB skill and equipment set with the active selection marked; alternate sets are not assigned a guessed transition order. It packages as an unsigned portable Windows executable. It does not require an account.
+**Status: complete for the first local-first slice.** The Windows desktop app imports PoB code/XML/files and supported pobb.in/Maxroll share links, normalizes skills/equipment/goals, supports ACTIVE/NEXT/INTERESTED builds, ranks known goals, explains recommendations, and exports JSON/CSV plus a manual FilterBlade review guide. It preserves and displays every named PoB skill and equipment set with the active selection marked; alternate sets are not assigned a guessed transition order. An explicitly ACTIVE PoB can seed a reviewed local character snapshot beneath the selected league, with a linked copy of its imported build facts. It packages as an unsigned portable Windows executable. It does not require an account.
 
 ## Phase 2 — Progression route foundation
 
@@ -18,13 +18,14 @@
 - Compare imported target specs against the ACTIVE PoB tree only when both tree versions match; show added/removed node IDs and withhold differences across missing or mismatched versions.
 - Optionally load a player-selected local GGG passive-tree JSON export to label same-version differences and retain relevant graph links/class starts. Use a deterministic breadth-first traversal from retained nodes or class start when topology is complete; do not bundle the export.
 - Present saved specs as author-provided alternatives. Their XML order is preserved but is not treated as a verified leveling sequence, and no respec cost or passive optimization is inferred.
+- **Partially delivered:** Convert an explicitly ACTIVE PoB into an editable local current-character record after league selection. It carries the imported gear/skills/passive specs through a linked build manifest, but it does not prove the live character matches that PoB; GGG OAuth sync remains a separate gated source.
 - Define an ordered typed route with stable step IDs, goal links, prerequisites, evidence, confidence, and a game-data version.
 - Generate only steps supported by imported state or curated versioned data; show “needs data” for everything else.
 - Add a route view to the desktop navigation showing the next steps by progression stage and a “Why this step?” explanation.
 - Keep the character snapshot, league snapshot, and one or more build manifests separate.
 - Export route JSON alongside existing priority-plan JSON/CSV.
 
-**Acceptance:** importing a PoB produces a route view that distinguishes known target/build facts from unknown current character, stash, tree, and acquisition facts. Route order and explanations are deterministic.
+**Acceptance:** importing a PoB produces a route view that distinguishes known target/build facts from unknown current character, stash, tree, and acquisition facts. A player can explicitly promote an ACTIVE PoB to a local current-character snapshot under the selected league, review its stage, and retain its full imported build facts. Route order and explanations are deterministic.
 
 ## Phase 3 — Current character, stash, and Atlas snapshots
 
@@ -71,7 +72,7 @@
 
 - Add local progression history and completed goal snapshots.
 - Add opt-in anonymized route feedback/reporting with clear review and privacy controls before any community service exists.
-- Keep Windows executables unsigned for now, as requested. Add signed distribution only if the user changes that decision; macOS/Linux packages, backup/restore, migrations, and an update path remain future release work.
+- Publish only explicitly tagged, checksum-verified unsigned Windows previews while requested; keep stable `v*` releases signed-only. Add signed distribution only if the user changes that decision; macOS/Linux packages, backup/restore, migrations, and an update path remain future release work.
 - Add PoE 2 only as a separate provider/data pack after PoE 1 route behavior and current PoE 2 API/game data are verified.
 
 ## Full-route definition of done
@@ -80,4 +81,4 @@ With a current character, league stash/Atlas snapshot, and imported target PoB, 
 
 ## Current verification record
 
-On 2026-10-05, `pnpm test` passed 68 tests across 10 files, including the `http-cache-semantics` max-stale security regression check and fail-closed release-signing checks; `pnpm build` passed TypeScript and the Vite production build. FilterBlade copy tests cover style/condition reuse, source-text and BOM preservation, duplicate bases, conservative skips, truncated rules, and overlay detection. The local FilterBlade options parser indexed 355 literal rule labels from 521 upstream QuickUI calls; 166 generated or unsupported entries remained unmapped, with no duplicate IDs. Same-version PoB passive specs produce exact added/removed node-ID comparisons; imported same-version tree topology can produce a caveated deterministic traversal. A fresh local Windows portable package is Authenticode `NotSigned` (SHA-256 `4A065098D9144F161BFDB9C3F28A80DB3DFE29BFDFBE0D64FDC981B8B8220297`) and has not been published. OAuth, verified farm/craft data, the full route, direct FilterBlade customizer-module integration, and GGG filter-engine validation remain outstanding.
+On 2026-10-05, `pnpm test` passed 71 tests across 11 files, including PoB-to-character draft checks, the `http-cache-semantics` max-stale security regression check, and fail-closed release-signing checks; `pnpm build` passed TypeScript and the Vite production build. FilterBlade copy tests cover style/condition reuse, source-text and BOM preservation, duplicate bases, conservative skips, truncated rules, and overlay detection. The local FilterBlade options parser indexed 355 literal rule labels from 521 upstream QuickUI calls; 166 generated or unsupported entries remained unmapped, with no duplicate IDs. Same-version PoB passive specs produce exact added/removed node-ID comparisons; imported same-version tree topology can produce a caveated deterministic traversal. A fresh local Windows portable package is Authenticode `NotSigned` (SHA-256 `D01D153DC3AB626942650A22F3F395280155B56D30E88CA68638FB7F0D05A763`) and has not been published as a GitHub Release. OAuth, verified farm/craft data, the full route, direct FilterBlade customizer-module integration, and GGG filter-engine validation remain outstanding.
