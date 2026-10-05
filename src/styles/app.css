@@ -683,6 +683,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .route-inspector-action strong, .route-inspector-section > strong { color: #d9d2c6; font: 700 12px/1.25 var(--display); }
 .route-inspector-action p { margin: 7px 0 0; color: #a6aaa2; font-size: 11px; line-height: 1.52; }
 .route-inspector-section { display: flex; flex-direction: column; gap: 9px; margin-top: 18px; }
+.equipment-comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.equipment-comparison-grid > div { min-width: 0; padding: 10px; border: 1px solid #38403f; border-radius: 4px; background: #1a2021; }
+.equipment-comparison-grid span { color: #bd9c6f; font-size: 8px; font-weight: 700; letter-spacing: .08em; }
+.equipment-comparison-grid p { margin: 6px 0 0; color: #e0d6c8; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.equipment-comparison-note { margin: 0; color: #898f8a; font-size: 9px; line-height: 1.5; }
 .route-evidence { padding-top: 9px; border-top: 1px solid #303838; }
 .route-evidence > span { color: #bd9c6f; font-size: 9px; font-weight: 600; text-transform: capitalize; }
 .route-evidence p, .route-data-gap p { margin: 5px 0 0; color: #979e98; font-size: 10px; line-height: 1.48; }
@@ -736,6 +741,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .route-context-card { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .route-context-stage { grid-column: span 2; }
   .route-tree-data { grid-template-columns: minmax(0, 1fr); }
+  .equipment-comparison-grid { grid-template-columns: minmax(0, 1fr); }
   .route-tree-data-controls { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   .route-step-card { grid-template-columns: 32px minmax(0,1fr) 13px; }
   .route-step-card > .route-status { grid-column: 2; justify-self: start; }

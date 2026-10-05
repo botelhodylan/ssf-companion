@@ -46,6 +46,7 @@
 ## Phase 5 — Route modules
 
 - Compare current and target gear to identify slot-level upgrade gaps, stash-owned inputs, and achievable crafts.
+- **Partially delivered:** Compare ACTIVE and target PoB equipment labels by slot and surface changed, target-only, or ACTIVE-only records. The route does not claim an upgrade until current-character gear and comparable item properties are available.
 - Generate step-by-step deterministic crafts, including base requirements, materials, unlocks, operation order, expected risk, and stop conditions.
 - Recommend target-farm methods and the corresponding Atlas passives using item source data and the player's owned maps/trees.
 - **Partially delivered:** Turn saved PoB specs into an inspectable graph traversal when the player imports matching local tree topology. This ordering is not a PoB-authored or optimized leveling guide. Do not compare node IDs across tree versions; next add progression checkpoints and reviewed class/tree guidance.

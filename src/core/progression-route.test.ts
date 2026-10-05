@@ -384,6 +384,71 @@ describe("buildProgressionRoute", () => {
     expect(filter?.requiredData).toContainEqual(expect.objectContaining({ key: "poe1_filter_item_classes" }));
   });
 
+  it("surfaces ACTIVE-to-target PoB equipment label differences without calling them upgrades", () => {
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      id: "active-setup",
+      name: "Active setup",
+      role: "ACTIVE",
+      equippedItems: [
+        { slotName: "Ring 1", itemId: "1", rarity: "UNIQUE", uniqueName: "The Taming", baseType: "Prismatic Ring" },
+        { slotName: "Helmet", itemId: "2", rarity: "RARE", itemName: "Doom Visor", baseType: "Bone Helmet" },
+        { slotName: "Boots", itemId: "3", rarity: "RARE", itemName: "Storm March", baseType: "Fugitive Boots" },
+        { slotName: "Belt", itemId: "4", rarity: "RARE" },
+      ],
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      id: "next-setup",
+      name: "Next setup",
+      role: "NEXT",
+      equippedItems: [
+        { slotName: "Ring 1", itemId: "10", rarity: "UNIQUE", uniqueName: "The Taming", baseType: "Prismatic Ring" },
+        { slotName: "Helmet", itemId: "20", rarity: "RARE", itemName: "Dread Brow", baseType: "Bone Helmet" },
+        { slotName: "Amulet", itemId: "30", rarity: "UNIQUE", uniqueName: "Presence of Chayula", baseType: "Onyx Amulet" },
+        { slotName: "Belt", itemId: "40", rarity: "RARE" },
+      ],
+    };
+
+    const route = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION });
+    const comparisons = route.steps.filter((step) => step.kind === "equipment_comparison");
+
+    expect(comparisons).toHaveLength(4);
+    expect(comparisons.find((step) => step.target === "Helmet")).toMatchObject({
+      status: "needs_personal_data",
+      confidence: "low",
+      equipmentComparison: {
+        relation: "changed",
+        activeItem: { label: "Doom Visor (Bone Helmet)" },
+        targetItem: { label: "Dread Brow (Bone Helmet)" },
+      },
+    });
+    const amuletComparison = comparisons.find((step) => step.target === "Amulet")?.equipmentComparison;
+    expect(amuletComparison).toMatchObject({
+      relation: "target_only",
+      targetItem: { label: "Presence of Chayula (Onyx Amulet)" },
+    });
+    expect(amuletComparison).not.toHaveProperty("activeItem");
+    const bootsComparison = comparisons.find((step) => step.target === "Boots")?.equipmentComparison;
+    expect(bootsComparison).toMatchObject({
+      relation: "active_only",
+      activeItem: { label: "Storm March (Fugitive Boots)" },
+    });
+    expect(bootsComparison).not.toHaveProperty("targetItem");
+    expect(comparisons.find((step) => step.target === "Belt")?.equipmentComparison).toMatchObject({
+      relation: "unresolved",
+      activeItem: { label: "Item details unavailable" },
+      targetItem: { label: "Item details unavailable" },
+    });
+    expect(comparisons.find((step) => step.target === "Belt")?.action).toContain("not contain enough matching name/base information");
+    expect(comparisons.some((step) => step.target === "Ring 1")).toBe(false);
+    expect(comparisons.find((step) => step.target === "Helmet")?.action).toContain("not proof that the target item is better");
+    expect(comparisons.find((step) => step.target === "Helmet")?.requiredData).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "confirmed_current_character_equipment", category: "personal" }),
+      expect.objectContaining({ key: "full_equipped_item_properties", category: "personal" }),
+    ]));
+  });
+
   it("is deterministic for identical snapshots", () => {
     const input = { build: BUILD, progression: PROGRESSION, stash: STASH } as const;
     expect(buildProgressionRoute(input)).toEqual(buildProgressionRoute(input));

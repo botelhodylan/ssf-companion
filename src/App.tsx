@@ -77,6 +77,7 @@ const PAGE_ICONS = {
 
 const ROUTE_STEP_LABELS: Record<ProgressionRouteStep["kind"], string> = {
   gear_gap: "Gear goal",
+  equipment_comparison: "Gear transition",
   crafting_plan: "Crafting",
   farming_atlas: "Farm & Atlas",
   passive_tree: "Character tree",
@@ -1082,6 +1083,22 @@ export default function App() {
                             </details>
                           )}
                         </div>
+                      </div>
+                    )}
+                    {selectedRouteStep.equipmentComparison && (
+                      <div className="route-inspector-section equipment-comparison-detail">
+                        <strong>Saved PoB equipment records</strong>
+                        <div className="equipment-comparison-grid">
+                          <div>
+                            <span>ACTIVE PoB</span>
+                            <p>{selectedRouteStep.equipmentComparison.activeItem?.label ?? "No parsed item in this slot"}</p>
+                          </div>
+                          <div>
+                            <span>Target PoB</span>
+                            <p>{selectedRouteStep.equipmentComparison.targetItem?.label ?? "No parsed item in this slot"}</p>
+                          </div>
+                        </div>
+                        <p className="equipment-comparison-note">This compares saved item labels and base types only. It does not read live character gear or compare item modifiers, so it cannot say whether one item is an upgrade.</p>
                       </div>
                     )}
                     <div className="route-inspector-section">

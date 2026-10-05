@@ -1,8 +1,8 @@
 import { poe1Provider } from "./game-provider";
 import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeDataset } from "./passive-tree-data";
-import type { BuildManifest, BuildRole, ItemGoal, ProgressionStage } from "./types";
+import type { BuildManifest, BuildRole, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
 
-export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.2.0" as const;
+export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.3.0" as const;
 
 export type RouteEvidenceSource =
   | "route_rules"
@@ -15,6 +15,7 @@ export type RouteConfidence = "high" | "medium" | "low";
 
 export type ProgressionRouteStepKind =
   | "gear_gap"
+  | "equipment_comparison"
   | "crafting_plan"
   | "farming_atlas"
   | "passive_tree"
@@ -45,6 +46,21 @@ export interface PassiveTreeComparison {
   readonly allocationOrderStatus: "complete" | "partial" | "unavailable";
   readonly allocationOrderMissingNodeIds?: readonly number[];
   readonly allocationOrderNote: string;
+}
+
+export interface EquipmentSlotComparison {
+  readonly slotName: string;
+  readonly relation: "changed" | "active_only" | "target_only" | "unresolved";
+  readonly activeItem?: {
+    readonly label: string;
+    readonly rarity?: string;
+    readonly baseType?: string;
+  };
+  readonly targetItem?: {
+    readonly label: string;
+    readonly rarity?: string;
+    readonly baseType?: string;
+  };
 }
 
 export interface RouteEvidence {
@@ -86,6 +102,8 @@ export interface ProgressionRouteStep {
   readonly target?: string;
   readonly targetQuantity?: number;
   readonly ownedQuantity?: number;
+  /** Visible item labels compared between saved ACTIVE and target PoB sets only. */
+  readonly equipmentComparison?: EquipmentSlotComparison;
   /** Exact node IDs and optional names resolved from a matching local tree export. */
   readonly passiveTree?: PassiveTreeComparison;
 }
@@ -117,7 +135,7 @@ export interface RouteStashSnapshot {
 
 export interface ProgressionRouteInput {
   readonly build: BuildManifest;
-  /** ACTIVE build snapshot used only for same-version passive-node set comparisons. */
+  /** ACTIVE PoB snapshot used for passive-node and visible equipment-label comparisons. */
   readonly currentBuild?: BuildManifest;
   readonly progression: RouteProgressionSnapshot;
   readonly stash?: RouteStashSnapshot | null;
@@ -272,6 +290,14 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     };
   });
 
+  const equipmentComparisonSteps = buildEquipmentComparisonSteps({
+    build,
+    currentBuild,
+    dataVersion,
+    routeEvidence,
+    progressionEvidence,
+  });
+
   const craftingGoals = build.itemGoals.filter((goal) => goal.kind === "crafting").sort(compareGoals);
   const craftingSteps: Omit<ProgressionRouteStep, "order">[] = craftingGoals.map((goal) => {
     const target = goalLabel(goal);
@@ -397,6 +423,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
 
   const ordered: Omit<ProgressionRouteStep, "order">[] = [
     ...gearSteps,
+    ...equipmentComparisonSteps,
     ...craftingSteps,
     farmingStep,
     ...passiveSteps,
@@ -413,6 +440,151 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     dataVersion,
     steps,
   };
+}
+
+function buildEquipmentComparisonSteps(input: {
+  readonly build: BuildManifest;
+  readonly currentBuild?: BuildManifest;
+  readonly dataVersion: ProgressionRouteDataVersion;
+  readonly routeEvidence: RouteEvidence;
+  readonly progressionEvidence: RouteEvidence;
+}): Omit<ProgressionRouteStep, "order">[] {
+  const { build, currentBuild, dataVersion, routeEvidence, progressionEvidence } = input;
+  if (
+    build.role === "ACTIVE" ||
+    currentBuild?.role !== "ACTIVE" ||
+    currentBuild.id === build.id ||
+    !currentBuild.equippedItems?.length ||
+    !build.equippedItems?.length
+  ) return [];
+
+  const activeSlots = groupEquippedItemsBySlot(currentBuild.equippedItems);
+  const targetSlots = groupEquippedItemsBySlot(build.equippedItems);
+  const slotKeys = [...new Set([...activeSlots.keys(), ...targetSlots.keys()])].sort();
+  const steps: Omit<ProgressionRouteStep, "order">[] = [];
+
+  for (const slotKey of slotKeys) {
+    const activeItems = activeSlots.get(slotKey) ?? [];
+    const targetItems = targetSlots.get(slotKey) ?? [];
+    const sample = activeItems[0] ?? targetItems[0];
+    const slotBaseName = sample?.slotName.trim() || slotKey;
+    const itemCount = Math.max(activeItems.length, targetItems.length);
+    for (let index = 0; index < itemCount; index += 1) {
+      const activeItem = activeItems[index];
+      const targetItem = targetItems[index];
+      const visibleRelation = activeItem && targetItem
+        ? compareVisibleEquipmentIdentity(activeItem, targetItem)
+        : undefined;
+      if (visibleRelation === "same") continue;
+
+      const slotName = itemCount > 1 ? `${slotBaseName} (${index + 1})` : slotBaseName;
+      const relation: EquipmentSlotComparison["relation"] = activeItem && targetItem
+        ? visibleRelation ?? "unresolved"
+        : activeItem
+          ? "active_only"
+          : "target_only";
+      const activeFact = activeItem ? equipmentItemSummary(activeItem) : undefined;
+      const targetFact = targetItem ? equipmentItemSummary(targetItem) : undefined;
+      const activeLabel = activeFact?.label ?? "No parsed item in ACTIVE PoB";
+      const targetLabel = targetFact?.label ?? "No parsed item in target PoB";
+      const action = relation === "changed"
+        ? `The ACTIVE PoB records ${activeLabel} in ${slotName}; the target PoB records ${targetLabel}. This is a saved-profile difference, not proof that the target item is better or that the ACTIVE PoB matches the live character. Confirm current gear and compare full item properties before deciding to farm or craft.`
+        : relation === "unresolved"
+          ? `The ACTIVE and target PoB records for ${slotName} do not contain enough matching name/base information to compare. Review both exports and confirm the live character before treating this slot as a gear gap.`
+        : relation === "target_only"
+          ? `The target PoB records ${targetLabel} in ${slotName}, while the ACTIVE PoB has no parsed item there. Confirm the live character and league stash before treating this as an acquisition goal.`
+          : `The ACTIVE PoB records ${activeLabel} in ${slotName}, while the target PoB has no parsed item there. This may be an intentionally empty target slot or an incomplete PoB export; confirm before changing the route or selling the item.`;
+
+      steps.push({
+        id: `equipment-comparison:${currentBuild.id}:${build.id}:${slotKey}:${index + 1}`,
+        kind: "equipment_comparison",
+        status: "needs_personal_data",
+        title: `Review gear difference: ${slotName}`,
+        action,
+        confidence: "low",
+        dataVersion,
+        evidence: [
+          routeEvidence,
+          {
+            source: "build_manifest",
+            version: `build-manifest-schema-${currentBuild.schemaVersion}`,
+            reference: currentBuild.id,
+            detail: `ACTIVE PoB equipment record for ${slotName}: ${activeLabel}.`,
+          },
+          {
+            source: "build_manifest",
+            version: `build-manifest-schema-${build.schemaVersion}`,
+            reference: build.id,
+            detail: `Target PoB equipment record for ${slotName}: ${targetLabel}.`,
+          },
+          progressionEvidence,
+        ],
+        requiredData: [
+          {
+            category: "personal",
+            key: "confirmed_current_character_equipment",
+            description: "The ACTIVE PoB is a saved build profile, not a live character sync. Confirm the current equipped item in game before treating this slot as a gap.",
+          },
+          {
+            category: "personal",
+            key: "full_equipped_item_properties",
+            description: "The current manifest keeps item names and base types but not modifiers, so it cannot decide whether the target is a real upgrade or provide a safe craft plan.",
+          },
+        ],
+        target: slotName,
+        equipmentComparison: {
+          slotName,
+          relation,
+          ...(activeFact ? { activeItem: activeFact } : {}),
+          ...(targetFact ? { targetItem: targetFact } : {}),
+        },
+      });
+    }
+  }
+  return steps;
+}
+
+function groupEquippedItemsBySlot(items: readonly EquippedItemFact[]): Map<string, EquippedItemFact[]> {
+  const groups = new Map<string, EquippedItemFact[]>();
+  for (const item of items) {
+    const key = normalizeEquipmentText(item.slotName);
+    if (!key) continue;
+    const group = groups.get(key) ?? [];
+    group.push(item);
+    groups.set(key, group);
+  }
+  return groups;
+}
+
+function compareVisibleEquipmentIdentity(
+  left: EquippedItemFact,
+  right: EquippedItemFact,
+): "same" | "changed" | "unresolved" {
+  const leftName = normalizeEquipmentText(left.uniqueName ?? left.itemName ?? "");
+  const rightName = normalizeEquipmentText(right.uniqueName ?? right.itemName ?? "");
+  const leftBase = normalizeEquipmentText(left.baseType ?? "");
+  const rightBase = normalizeEquipmentText(right.baseType ?? "");
+  if ((leftName && rightName && leftName !== rightName) || (leftBase && rightBase && leftBase !== rightBase)) {
+    return "changed";
+  }
+  if ((leftName && leftName === rightName) || (leftBase && leftBase === rightBase)) return "same";
+  return "unresolved";
+}
+
+function equipmentItemSummary(item: EquippedItemFact): NonNullable<EquipmentSlotComparison["activeItem"]> {
+  const itemName = item.uniqueName ?? item.itemName;
+  const label = itemName && item.baseType && normalizeEquipmentText(itemName) !== normalizeEquipmentText(item.baseType)
+    ? `${itemName} (${item.baseType})`
+    : itemName ?? item.baseType ?? "Item details unavailable";
+  return {
+    label,
+    ...(item.rarity ? { rarity: item.rarity } : {}),
+    ...(item.baseType ? { baseType: item.baseType } : {}),
+  };
+}
+
+function normalizeEquipmentText(value: string): string {
+  return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
 }
 
 function makeUnknownStep(input: Omit<ProgressionRouteStep, "order" | "status" | "requiredData"> & {
