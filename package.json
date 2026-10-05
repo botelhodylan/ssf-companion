@@ -25,7 +25,7 @@
     "package:win:installer": "pnpm install-electron && pnpm build && electron-builder --win nsis --config.electronDist=node_modules/electron/dist"
   },
   "dependencies": {
-    "lucide-react": "^1.49.0",
+    "lucide-react": "^1.50.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
