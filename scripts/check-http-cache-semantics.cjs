@@ -21,9 +21,9 @@ assert.equal(packageJson.version, "4.3.0");
 const CachePolicy = require(patchedDirectory);
 CachePolicy.prototype.now = () => 0;
 
-function evaluate(responseHeaders, requestCacheControl) {
+function evaluate(responseHeaders, requestCacheControl, options) {
   const request = { url: "/private", headers: { host: "cache.example" } };
-  const policy = new CachePolicy(request, { status: 200, headers: responseHeaders });
+  const policy = new CachePolicy(request, { status: 200, headers: responseHeaders }, options);
   return policy.evaluateRequest({
     ...request,
     headers: { ...request.headers, "cache-control": requestCacheControl },
@@ -44,5 +44,21 @@ for (const responseHeaders of [
 const ordinaryStaleResponse = evaluate({ "cache-control": "max-age=1", age: "2" }, "max-stale=10");
 assert.ok(ordinaryStaleResponse.response, "max-stale should still serve ordinary stale responses when allowed");
 assert.equal(ordinaryStaleResponse.revalidation, undefined);
+
+for (const responseHeaders of [
+  { "cache-control": "public, max-age=0", "set-cookie": "session=secret" },
+  { "cache-control": "immutable, max-age=0", "set-cookie": "session=secret" },
+]) {
+  assert.ok(evaluate(responseHeaders, "max-stale=100").response, "explicitly permitted shared cookie responses may remain stale-eligible");
+}
+
+assert.ok(
+  evaluate(
+    { "cache-control": "max-age=0", "set-cookie": "session=secret" },
+    "max-stale=100",
+    { shared: false },
+  ).response,
+  "private caches should retain their original stale-response behavior",
+);
 
 console.log("http-cache-semantics max-stale security regression checks passed");
