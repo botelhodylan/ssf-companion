@@ -50,7 +50,7 @@ jobs:
           Set-Content -LiteralPath "release/SHA256SUMS.txt" -Value "$hash  $($asset.Name)" -Encoding ascii
           Write-Host "Verified unsigned preview SHA-256: $hash"
       - name: Publish unsigned early-access preview
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: SSF Companion ${{ github.ref_name }} — unsigned preview
           prerelease: true
