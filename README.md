@@ -48,7 +48,7 @@ The app does not inspect the game process, read game logs, or access or modify t
 
 GGG's official API describes OAuth-backed PoE 1 character, league, and stash access. As checked on 2026-10-05, GGG says it is unable to process new OAuth application registrations, so account sync cannot be activated for this new project yet. The UI explains this without blocking build import or analysis.
 
-FilterBlade offers a public customizer-definition format and a “My Modules” workflow, but those are not a documented per-player priority-import API. Its upload guidance also warns that uploading a whole filter limits customizer and “My Filters” behavior. V1 therefore exports a Markdown review guide and semantic JSON/CSV priorities. Players apply chosen changes manually inside their existing FilterBlade/NeverSink setup, which keeps their styles, sounds, and strictness intact. The handoff is not an importable module or a ready-to-use `.filter` file.
+FilterBlade's [public `.options` documentation](https://github.com/NeverSinkDev/FilterBlade-Public-Assets/blob/main/README_OptionFile.md) defines its customizer UI and warns that rule IDs must stay stable for saved customizations. Its [PoE 1 customizer](https://www.filterblade.xyz/?game=Poe1) manages “My Modules” inside FilterBlade; no external per-player priority-import API has been verified. V1 therefore exports a Markdown review guide and semantic JSON/CSV priorities. Players apply chosen changes manually inside their existing FilterBlade/NeverSink setup, which keeps their styles, sounds, and strictness intact. The handoff is not an importable module or a ready-to-use `.filter` file.
 
 ## Project status
 
