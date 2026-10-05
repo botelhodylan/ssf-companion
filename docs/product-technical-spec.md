@@ -196,16 +196,16 @@ GGG permits independently running executable apps when they use a public OAuth c
 
 ## 11. Quality gates
 
-- Automated tests currently cover PoB envelope decode/invalid inputs, supported-link recognition, XML normalization/warnings, role weighting, deterministic score/reason generation, stash/clutter signals, and JSON/CSV export shape including spreadsheet-formula guards. Electron IPC/fetch-route security still needs focused adapter tests.
+- Automated tests currently cover PoB envelope decode/invalid inputs, supported-link recognition, XML normalization/warnings, role weighting, deterministic score/reason generation, stash/clutter signals, passive-tree topology/order, local FilterBlade audit, Markdown/JSON/CSV exports, and spreadsheet-formula guards. Electron IPC/fetch-route security still needs focused adapter tests.
 - Manual desktop QA covers launch, resizing, league-before-character behavior, build import errors/success, role changes, explanation updates, export, and offline startup.
 - UI QA covers the full desktop workspace at 1440×1000 and one narrow window, keyboard labels/focus, and Electron console errors.
 - Packaging QA launches the generated portable Windows executable and verifies its source build metadata.
-- Public-release gates include OAuth client approval, privacy notice, support contact, signed installer decision, current game data review, FilterBlade permission/mapping review, and choosing a repository remote.
+- Public-release gates include OAuth client approval, current game-data review, and FilterBlade permission/mapping review. The public repository and GitHub Issues contact are established; trusted Windows signing remains disabled until a signing service and its release prerequisites are authorized and configured.
 
-### V1 verification record (2026-09-29)
+### V1 verification record (2026-10-05)
 
-- Passed: 17 unit tests, TypeScript check, Vite production build, in-app UI preview, local PoB XML import, manifest field review, priority/reason rendering, and Windows portable executable launch (window title `SSF Companion`).
-- Still manual: Pobb.in/Maxroll requests, local file picker, native save dialogs, window resizing at full desktop resolution, and signed/public distribution. OAuth sync remains unavailable pending GGG registration.
+- Passed: 41 unit tests, the HTTP cache max-stale regression check, TypeScript check, Vite production build, and Electron renderer checks for passive allocation order. The combined FilterBlade handoff test verifies that the export carries bounded candidate rule IDs, conditions, and existing presentation while retaining audit limitations.
+- A Windows portable preview was packaged and launched earlier; that local artifact was unsigned and unpublished. Still manual: Pobb.in/Maxroll requests, local file picker, native save dialogs, full-resolution resizing, and signed/public binary distribution. OAuth sync remains unavailable pending GGG registration.
 
 ## 12. External references
 
