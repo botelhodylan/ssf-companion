@@ -589,7 +589,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .modal-callout p { margin: 0; color: #d8c5a5; }
 .modal-small-note { color: #868e89; font-size: 11px; }
 .modal-external-link { margin-top: 4px; }
-.modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 13px 20px; border-top: 1px solid #343c3b; }
+.modal-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 13px 20px; border-top: 1px solid #343c3b; }
 .modal-form { display: flex; flex-direction: column; gap: 8px; }
 .modal-form label { color: #ddd3c4; font-size: 12px; font-weight: 600; }
 .modal-form input, .modal-form select { width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid #434b4a; border-radius: 4px; color: #eee4d4; background: #14191a; font-size: 13px; }

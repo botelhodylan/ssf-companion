@@ -9,6 +9,7 @@ This project follows a simple release history. Changes are grouped by version; G
 - Add a read-only local audit for exported PoE filters, showing candidate build-target BaseType mentions and existing NeverSink/FilterBlade rule styling without changing or uploading the selected file.
 - Add an optional combined Markdown handoff that places current audit references and existing style directives alongside build-aware priority recommendations.
 - Optionally index local FilterBlade `CustomizerDefault.options` rule labels and attach exact matches to the read-only filter audit and Markdown handoff.
+- Load the current public PoE 1 FilterBlade Customizer labels on request, with size, content-type, redirect-host, and timeout checks; retain local options-file import for offline/version-specific audits.
 - Preserve and display all named PoB skill and equipment sets, with active selections distinguished from alternate setups.
 - Import bounded PoB item level, quality, socket layout, display properties, item flags, and modifier-like lines across active and alternate gear sets; include differences in the route as inspectable evidence without ranking the items.
 - Pair each priority target with its bounded candidate NeverSink/FilterBlade rule references in the Markdown handoff, while labeling them as clues rather than effective filter outcomes.

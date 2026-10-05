@@ -22,6 +22,7 @@ import { normalizeBuildInput } from "./core/build-import";
 import { buildProgressionRoute, type ProgressionRouteStep } from "./core/progression-route";
 import { auditFilterBladeFile, type FilterBladeAudit } from "./core/filterblade-audit";
 import { attachFilterBladeCustomizerNames, parseFilterBladeCustomizerOptions, type FilterBladeCustomizerOptions } from "./core/filterblade-options";
+import { fetchPublicFilterBladeOptions } from "./core/filterblade-public-options";
 import { parsePassiveTreeExport, type PassiveTreeDataset } from "./core/passive-tree-data";
 import type { AtlasTreeDataset, AtlasTreeImport, SavedAtlasTree } from "./core/atlas-tree-import";
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
@@ -225,6 +226,7 @@ export default function App() {
   const [filterAuditImporting, setFilterAuditImporting] = useState(false);
   const [filterBladeOptions, setFilterBladeOptions] = useState<FilterBladeCustomizerOptions | null>(null);
   const [filterBladeOptionsImporting, setFilterBladeOptionsImporting] = useState(false);
+  const [filterBladeOptionsFetching, setFilterBladeOptionsFetching] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [importInput, setImportInput] = useState("");
   const [importing, setImporting] = useState(false);
@@ -645,6 +647,18 @@ export default function App() {
       return;
     }
     filterBladeOptionsInputRef.current?.click();
+  }
+
+  async function loadPublicFilterBladeOptions() {
+    setFilterBladeOptionsFetching(true);
+    try {
+      const file = await fetchPublicFilterBladeOptions();
+      acceptFilterBladeOptionsFile(file);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The current public FilterBlade options file could not be loaded.");
+    } finally {
+      setFilterBladeOptionsFetching(false);
+    }
   }
 
   async function browserFilterBladeOptionsFileChosen(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1580,15 +1594,18 @@ export default function App() {
       {filterAuditModalOpen && filterAuditWithCustomizer && (
         <Modal title="FilterBlade rule audit" width="wide" onClose={() => setFilterAuditModalOpen(false)} footer={
           <>
-            <button className="button button-outline" type="button" onClick={() => void openFilterBladeOptions()} disabled={filterBladeOptionsImporting}>
-              <FolderOpen size={14} /> {filterBladeOptionsImporting ? "Reading options…" : filterBladeOptions ? "Reload Customizer labels" : "Load Customizer labels"}
+            <button className="button button-outline" type="button" onClick={() => void loadPublicFilterBladeOptions()} disabled={filterBladeOptionsFetching || filterBladeOptionsImporting}>
+              <ArrowDownToLine size={14} /> {filterBladeOptionsFetching ? "Loading public labels…" : filterBladeOptions ? "Refresh public labels" : "Load current public labels"}
+            </button>
+            <button className="button button-outline" type="button" onClick={() => void openFilterBladeOptions()} disabled={filterBladeOptionsFetching || filterBladeOptionsImporting}>
+              <FolderOpen size={14} /> {filterBladeOptionsImporting ? "Reading local file…" : "Load local options file"}
             </button>
             <button className="button button-quiet" type="button" onClick={() => setFilterAuditModalOpen(false)}>Done</button>
             <button className="button button-primary" type="button" onClick={() => { setFilterAuditModalOpen(false); exportContent("markdown"); }}>Export handoff with audit</button>
           </>
         }>
           <input ref={filterBladeOptionsInputRef} className="sr-only" type="file" accept=".options,.txt,text/plain" onChange={(event) => void browserFilterBladeOptionsFileChosen(event)} />
-          <div className="modal-callout filter-audit-callout"><CircleHelp size={18} /><p>This is a read-only local audit. It does not modify or upload your filter. Matches are candidate BaseType mentions: the audit lists other rule lines but does not evaluate them, and it does not open files named by Import rules. Optionally load FilterBlade&rsquo;s local <code>CustomizerDefault.options</code> file to add labels for exact rule IDs found in this filter.</p></div>
+          <div className="modal-callout filter-audit-callout"><CircleHelp size={18} /><p>This is a read-only local audit. It does not modify or upload your filter. Matches are candidate BaseType mentions: the audit lists other rule lines but does not evaluate them, and it does not open files named by Import rules. Load current PoE 1 customizer labels from NeverSink&rsquo;s public assets, or choose a local <code>CustomizerDefault.options</code> file. Only labels for exact rule IDs found in this filter are added.</p></div>
           <div className="filter-audit-summary">
             <div><span>FILE</span><strong>{filterAuditWithCustomizer.sourceFile}</strong></div>
             <div><span>ACTIVE RULES</span><strong>{filterAuditWithCustomizer.activeRuleCount.toLocaleString()}</strong></div>
@@ -1596,7 +1613,7 @@ export default function App() {
           </div>
           {filterAuditWithCustomizer.customizerOptions && <div className="filterblade-options-status" role="status">
             <div><strong>Customizer labels loaded from {filterAuditWithCustomizer.customizerOptions.sourceFile}</strong><span>{filterAuditWithCustomizer.customizerOptions.indexedRuleCount.toLocaleString()} exact rule IDs indexed · {filterAuditWithCustomizer.targets.flatMap((target) => target.rules).filter((rule) => rule.customizerRule).length.toLocaleString()} candidate rule references labeled</span></div>
-            <p>Only literal QuickUI entries were read. {filterAuditWithCustomizer.customizerOptions.unmappedQuickUiCalls.toLocaleString()} generated or unsupported entries were not named; {filterAuditWithCustomizer.customizerOptions.duplicateRuleIds.length.toLocaleString()} duplicate IDs were withheld. The file does not identify the live FilterBlade version or your saved settings.</p>
+            <p>Only literal QuickUI entries were read. {filterAuditWithCustomizer.customizerOptions.unmappedQuickUiCalls.toLocaleString()} generated or unsupported entries were not named; {filterAuditWithCustomizer.customizerOptions.duplicateRuleIds.length.toLocaleString()} duplicate IDs were withheld. Public labels may differ from the version or saved settings for your filter.</p>
             <button className="text-link" type="button" onClick={() => void openTrustedLink("https://github.com/NeverSinkDev/FilterBlade-Public-Assets/blob/main/FbPoe1Configs/CustomizerDefault.options")}>Open the FilterBlade public options file <ExternalLink size={12} /></button>
           </div>}
           <div className="filter-audit-targets">
