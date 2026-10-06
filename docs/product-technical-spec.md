@@ -148,6 +148,8 @@ The local Atlas adapter accepts HTTPS share URLs from GGG's official `pathofexil
 
 GGG's [developer reference](https://www.pathofexile.com/developer/docs/reference#extra-definitions) documents the base64url URL payload and Atlas-specific constraints. GGG's [Atlas export repository](https://github.com/grindinggear/atlastree-export) describes `data.json` as exported Atlas data. That file does not declare its PoE patch, so names/stats shown from it are unverified references; the app does not make patch-sensitive acquisition recommendations from them. The separate league-account API can provide saved Atlas trees under `account:league_accounts` once an approved OAuth client is available.
 
+Players may also paste the English summary from PoE 1's `/atlaspassives` chat command, which GGG introduced to detail Atlas passive point sources and points still missing from quests ([official 3.17.2 patch notes](https://www.pathofexile.com/forum/view-thread/3251063)). The importer requires a supported total/allocated-count line, previews the result, then persists only normalized totals and generic source labels with the selected league; it discards the pasted report. This summary does not expose selected node hashes or identify which farming strategy to use. The parser reports unsupported formats instead of guessing when the game output changes.
+
 Each snapshot can be absent. The planner must still work from a PoB alone, but must label its result “build target only” and must not claim to know the player's missing gear, stash, current passive allocations, or Atlas allocations.
 
 ### Route step contract
@@ -214,7 +216,7 @@ GGG permits independently running executable apps when they use a public OAuth c
 
 ### V1 verification record (2026-10-05)
 
-- Passed: 107 unit tests across 14 files, the HTTP cache and `sprintf-js` regression checks, TypeScript check, Vite production build, and all 3 Playwright flows. Windows CI verifies the Electron shell, league-first PoB character flow, local stash import and exact gear coverage, player-assigned PoB tree levels, route checkpoints, and route-pack mechanic details.
+- Passed: 110 unit tests across 15 files, HTTP cache and `sprintf-js` regression checks, TypeScript check, Vite production build, and all 4 Playwright workflows. The current workflow separates Playwright into its own Windows CI job.
 - The [0.2.3 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/tag/preview-v0.2.3) is public. The 101,386,948-byte portable executable passed product/version and Authenticode `NotSigned` checks; its published SHA-256 is `34c3f4a54b73dee3181d79f23b1a79907cb3e469739f07f8ff857c8000ab65ea`. `source-map-js` is pinned to 1.2.2; the registry audit still lists the locally patched `sprintf-js` 1.1.3 build dependency because no fixed package version is published. OAuth sync remains unavailable while GGG is unable to process new application registrations. A reviewed, bundled progression guide and verified farming/crafting data are still outstanding.
 
 ## 12. External references

@@ -133,6 +133,7 @@ describe("buildProgressionRoute", () => {
       buildManifestSchema: 1,
       progressionSnapshot: "character-sync-12",
       stashSnapshot: "league-stash-31",
+      atlasProgressSnapshot: null,
       curatedData: "not-loaded",
     });
     expect(ring?.evidence).toEqual(expect.arrayContaining([
@@ -141,6 +142,21 @@ describe("buildProgressionRoute", () => {
       expect.objectContaining({ source: "stash_snapshot", version: "league-stash-31" }),
     ]));
     expect(ring?.confidence).toBe("high");
+  });
+
+  it("carries league Atlas progress provenance into route evidence", () => {
+    const route = buildProgressionRoute({
+      build: BUILD,
+      progression: {
+        ...PROGRESSION,
+        atlasProgress: { version: "atlas-report-1", totalPoints: 132, allocatedPoints: 120 },
+      },
+    });
+    const progressionEvidence = route.steps[0].evidence.find((item) => item.source === "progression_snapshot");
+
+    expect(route.steps[0].dataVersion.atlasProgressSnapshot).toBe("atlas-report-1");
+    expect(progressionEvidence?.detail).toContain("132 Atlas points earned and 120 allocated");
+    expect(progressionEvidence?.detail).toContain("not mapped to recommendations");
   });
 
   it("does not claim a gear gap when no stash snapshot was supplied", () => {

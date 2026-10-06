@@ -6,7 +6,7 @@ This is an early open-source build. The initial distribution target is a portabl
 
 ## Download
 
-The [0.2.3 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.3/SSF-Companion-0.2.3-portable.exe) is available now. Verify it with the accompanying [SHA-256 checksum](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.3/SHA256SUMS.txt). This early preview is not signed and does not bundle a complete patch-versioned progression guide or full endgame route.
+The [0.2.4 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.4/SSF-Companion-0.2.4-portable.exe) is available now. Verify it with the accompanying [SHA-256 checksum](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.4/SHA256SUMS.txt). This early preview is not signed and does not bundle a complete patch-versioned progression guide or full endgame route.
 
 ## Current slice
 
@@ -14,6 +14,7 @@ The [0.2.3 unsigned Windows preview](https://github.com/botelhodylan/ssf-compani
 - Keep builds under a local league and character, with `ACTIVE`, `NEXT`, and `INTERESTED` roles.
 - Turn an explicitly `ACTIVE` PoB import into a reviewed local character snapshot under the selected league, keeping its gear sets, skill sets, and passive specs linked to the character.
 - Import standard or Ruthless Atlas Skill Tree share URLs from GGG, save/re-import local JSON snapshots under the selected league, and optionally load GGG's local Atlas export to display matching node names/stats. The export has no patch label, so the app does not claim those facts are current or recommend farm trees yet.
+- Paste the PoE 1 `/atlaspassives` report, preview its point totals and clearly labeled source counts, then save the normalized summary to the selected league. The route includes that snapshot as evidence; source labels are not interpreted as farming advice, and pasted text is discarded. See [GGG's patch note introducing the command](https://www.pathofexile.com/forum/view-thread/3251063).
 - Produce deterministic item-priority recommendations with a “Why am I seeing this?” explanation.
 - Preserve all named passive-tree specs, node IDs, and tree versions from imported PoB builds. Assign a level to each guide-provided PoB spec to add review checkpoints to the route; levels are saved locally and never inferred. Optionally load a local GGG tree JSON export to label nodes and create a deterministic graph traversal from the class start or same-version retained allocations; no GGG tree data is bundled. This order is not a PoB-authored or optimized leveling guide.
 - Show a deterministic progression-route foundation for gear, crafting, farming/Atlas, passive trees, and loot priorities. Each step includes evidence, rule version, confidence, and explicit player/game-data gaps.
@@ -43,7 +44,7 @@ pnpm test:e2e
 pnpm package:win
 ```
 
-Playwright launches Electron with an isolated profile to check the desktop preload bridge and app version, exercises league-first PoB-to-character import plus a build-matched level checkpoint and a local stash snapshot that completes an exact gear goal, and runs the renderer in Chromium to inspect route-pack import through the cited mechanic-playbook inspector. CI installs Chromium and runs all three checks on Windows after the unit suite and production build, then preserves the stash and route screenshots as run artifacts; failure diagnostics are uploaded separately.
+Playwright launches Electron with an isolated profile to check the desktop preload bridge and app version, exercises league-first PoB-to-character import plus a build-matched level checkpoint and a local stash snapshot that completes an exact gear goal, verifies that Atlas report snapshots stay with their league, and runs the renderer in Chromium to inspect route-pack import through the cited mechanic-playbook inspector. GitHub Actions has a dedicated Windows Playwright job that installs Chromium, runs all four browser workflows, preserves screenshots as run artifacts, and uploads diagnostics after failures.
 
 `pnpm package:win` creates a portable Windows executable in `release/`.
 Windows downloads are unsigned for now. The preview channel publishes a SHA-256 checksum, so Windows may show an unknown-publisher warning. The signed stable-release workflow remains dormant unless signing is requested and configured.

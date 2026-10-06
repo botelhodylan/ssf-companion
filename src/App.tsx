@@ -30,6 +30,7 @@ import type { AtlasTreeDataset, AtlasTreeImport, SavedAtlasTree } from "./core/a
 import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } from "./core/priority-plan";
 import { rankItemsByRelevance } from "./core/relevance";
 import { shouldShowSampleBuilds } from "./core/sample-mode";
+import { parseAtlasProgressReport, type ParsedAtlasProgressReport } from "./core/atlas-progress";
 import { parsePoe1RouteKnowledgePack } from "./core/poe1-route-pack";
 import {
   countStashMatches,
@@ -72,6 +73,12 @@ type StoredLeagueStash = ParsedLocalStashSnapshot & {
   importedAt: string;
   sourceFile: string;
 };
+type StoredLeagueAtlasProgress = ParsedAtlasProgressReport & {
+  leagueId: string;
+  source: "manual_command";
+  version: string;
+  importedAt: string;
+};
 const GITHUB_ISSUES_URL = "https://github.com/botelhodylan/ssf-companion/issues";
 
 const STORAGE = {
@@ -86,6 +93,7 @@ const STORAGE = {
   legacyContact: "ssf-companion:pobb-contact:v1",
   passiveTreeData: "ssf-companion:passive-tree-data:v1",
   stashSnapshots: "ssf-companion:league-stash-snapshots:v1",
+  atlasProgress: "ssf-companion:league-atlas-progress:v1",
   atlasTrees: "ssf-companion:atlas-trees:v1",
   atlasTreeData: "ssf-companion:atlas-tree-data:v1",
   routeKnowledgePack: "ssf-companion:route-knowledge-pack:v1",
@@ -239,6 +247,7 @@ export default function App() {
   const [passiveTreeData, setPassiveTreeData] = useStoredValue<PassiveTreeDataset | null>(STORAGE.passiveTreeData, null);
   const [savedAtlasTrees, setSavedAtlasTrees] = useStoredValue<SavedAtlasTree[]>(STORAGE.atlasTrees, []);
   const [stashSnapshots, setStashSnapshots] = useStoredValue<StoredLeagueStash[]>(STORAGE.stashSnapshots, []);
+  const [atlasProgressSnapshots, setAtlasProgressSnapshots] = useStoredValue<StoredLeagueAtlasProgress[]>(STORAGE.atlasProgress, []);
   const [atlasTreeDataset, setAtlasTreeDataset] = useStoredValue<AtlasTreeDataset | null>(STORAGE.atlasTreeData, null);
   const [storedRouteKnowledgePack, setRouteKnowledgePack] = useStoredValue<unknown>(STORAGE.routeKnowledgePack, null);
   const routeKnowledgePack = useMemo(() => {
@@ -266,6 +275,9 @@ export default function App() {
   const [filterBladeOptionsImporting, setFilterBladeOptionsImporting] = useState(false);
   const [filterBladeOptionsFetching, setFilterBladeOptionsFetching] = useState(false);
   const [stashImportMessage, setStashImportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [atlasProgressInput, setAtlasProgressInput] = useState("");
+  const [atlasProgressDraft, setAtlasProgressDraft] = useState<{ leagueId: string; report: ParsedAtlasProgressReport } | null>(null);
+  const [atlasProgressMessage, setAtlasProgressMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [importInput, setImportInput] = useState("");
   const [importing, setImporting] = useState(false);
@@ -301,6 +313,7 @@ export default function App() {
   const leagueCharacters = characters.filter((character) => character.leagueId === selectedLeagueId);
   const selectedCharacter = leagueCharacters.find((character) => character.id === selectedCharacterId);
   const selectedLeagueStash = stashSnapshots.find((snapshot) => snapshot.leagueId === selectedLeagueId);
+  const selectedLeagueAtlasProgress = atlasProgressSnapshots.find((snapshot) => snapshot.leagueId === selectedLeagueId);
 
   useEffect(() => {
     if (selectedCharacterId && !characters.some((character) => character.id === selectedCharacterId && character.leagueId === selectedLeagueId)) {
@@ -358,9 +371,16 @@ export default function App() {
         source,
         version: snapshotVersion,
         ...(selectedCharacter?.level ? { characterLevel: selectedCharacter.level } : {}),
+        ...(selectedLeagueAtlasProgress ? {
+          atlasProgress: {
+            version: selectedLeagueAtlasProgress.version,
+            totalPoints: selectedLeagueAtlasProgress.totalPoints,
+            allocatedPoints: selectedLeagueAtlasProgress.allocatedPoints,
+          },
+        } : {}),
       },
     });
-  }, [selectedBuild, visibleBuilds, selectedCharacter, selectedLeagueStash, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData, routeKnowledgePack, savedPassiveSpecLevels]);
+  }, [selectedBuild, visibleBuilds, selectedCharacter, selectedLeagueStash, selectedLeagueAtlasProgress, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData, routeKnowledgePack, savedPassiveSpecLevels]);
   const selectedRouteStep = progressionRoute?.steps.find((step) => step.id === selectedRouteStepId)
     ?? progressionRoute?.steps[0];
 
@@ -822,6 +842,52 @@ export default function App() {
     if (!selectedLeague) return;
     setStashSnapshots((previous) => previous.filter((snapshot) => snapshot.leagueId !== selectedLeague.id));
     setStashImportMessage({ kind: "success", text: "Removed the local stash snapshot for " + selectedLeague.name + "." });
+  }
+
+  function previewAtlasProgressReport() {
+    setAtlasProgressMessage(null);
+    try {
+      if (!selectedLeague) throw new Error("Select a league before importing its Atlas progress report.");
+      const report = parseAtlasProgressReport(atlasProgressInput);
+      setAtlasProgressDraft({ leagueId: selectedLeague.id, report });
+      setAtlasProgressMessage({
+        kind: "success",
+        text: `Preview ready: ${report.totalPoints} Atlas points earned, ${report.allocatedPoints} allocated, and ${report.sources.length} source counts recognized.`,
+      });
+    } catch (error) {
+      setAtlasProgressDraft(null);
+      setAtlasProgressMessage({
+        kind: "error",
+        text: error instanceof Error ? error.message : "The Atlas progress report could not be read.",
+      });
+    }
+  }
+
+  function saveAtlasProgressReport() {
+    if (!selectedLeague || !atlasProgressDraft || atlasProgressDraft.leagueId !== selectedLeague.id) {
+      setAtlasProgressMessage({ kind: "error", text: "Preview a report again for the currently selected league." });
+      return;
+    }
+    const snapshot: StoredLeagueAtlasProgress = {
+      ...atlasProgressDraft.report,
+      leagueId: selectedLeague.id,
+      source: "manual_command",
+      version: `manual-atlas-progress-${crypto.randomUUID()}`,
+      importedAt: new Date().toISOString(),
+    };
+    setAtlasProgressSnapshots((previous) => [
+      ...previous.filter((existing) => existing.leagueId !== selectedLeague.id),
+      snapshot,
+    ]);
+    setAtlasProgressInput("");
+    setAtlasProgressDraft(null);
+    setAtlasProgressMessage({ kind: "success", text: `Saved the /atlaspassives summary for ${selectedLeague.name}. The pasted report text was discarded.` });
+  }
+
+  function clearLeagueAtlasProgress() {
+    if (!selectedLeague) return;
+    setAtlasProgressSnapshots((previous) => previous.filter((snapshot) => snapshot.leagueId !== selectedLeague.id));
+    setAtlasProgressMessage({ kind: "success", text: `Removed the Atlas progress report for ${selectedLeague.name}.` });
   }
 
   function acceptFilterFile(file: { name: string; content: string }) {
@@ -1386,19 +1452,22 @@ export default function App() {
     const confirmedCount = route?.steps.filter((step) => step.status === "complete" || step.status === "already_aligned").length ?? 0;
     const needsCuratedCount = route?.steps.filter((step) => step.requiredData.some((item) => item.category === "curated")).length ?? 0;
     const currentStageValue = routeStage ?? "";
-    const snapshotNote = sampleMode
+    const snapshotNoteBase = sampleMode
       ? "Example route. Import your own PoB build and set your current progression stage to start a personal plan."
       : selectedCharacter
         ? "Current stage comes from your local character profile. " +
           (selectedLeagueStash
             ? "A player-provided " + selectedLeagueStash.coverage + " stash snapshot is loaded for " + (selectedLeague?.name ?? "the selected league") + ". "
             : "No league stash snapshot is loaded. ") +
-          "Live gear, passive nodes, and Atlas state have not been synced."
+          "Live character gear and passive nodes have not been synced."
         : selectedLeagueStash
           ? "Build target only. A player-provided " + selectedLeagueStash.coverage +
             " stash snapshot is loaded for " + (selectedLeague?.name ?? "the selected league") +
             "; current character stage, gear, passive nodes, and Atlas state are unknown."
           : "Build target only. Your current character and league stash are not connected; choose a current stage to make the route more specific.";
+    const snapshotNote = snapshotNoteBase + (selectedLeagueAtlasProgress
+      ? ` League Atlas progress report: ${selectedLeagueAtlasProgress.totalPoints} points earned, ${selectedLeagueAtlasProgress.allocatedPoints} allocated.`
+      : " No league Atlas progress report is loaded.");
 
     return (
       <div className="secondary-page route-page">
@@ -1917,6 +1986,66 @@ export default function App() {
             </div>
           )}
           <p className="modal-small-note">The template uses the SSF Companion schema, not a direct GGG API response. “Partial” means unlisted items are unknown; choose “complete” only when the file covers all stash tabs you want counted. Only exact supplied names, base types, and tags can match route items.</p>
+        </section>
+        <section className="settings-section atlas-progress-import" aria-label="League Atlas progress snapshot">
+          <div>
+            <span className="section-kicker">LEAGUE ATLAS PROGRESS</span>
+            <h2>Import an in-game Atlas progress report</h2>
+            <p>In PoE 1, run <code>/atlaspassives</code> and paste the English summary. Preview the point totals before saving them to the selected league. The app keeps normalized counts and source labels only; it does not read game files or turn labels into farming advice.</p>
+            <button className="text-link" type="button" onClick={() => void openTrustedLink("https://www.pathofexile.com/forum/view-thread/3251063")}>GGG patch notes for /atlaspassives <ExternalLink size={13} /></button>
+          </div>
+          <label className="settings-input-label" htmlFor="atlas-progress-report">/atlaspassives report</label>
+          <textarea
+            id="atlas-progress-report"
+            value={atlasProgressInput}
+            onChange={(event) => {
+              setAtlasProgressInput(event.target.value);
+              setAtlasProgressDraft(null);
+              setAtlasProgressMessage(null);
+            }}
+            rows={7}
+            maxLength={64_000}
+            placeholder={'132 total Atlas Passive Skill points (120 allocated)\n100/100 Bonus Objectives\n5/5 from Maven\'s Invitation: The Atlas'}
+            disabled={!selectedLeague}
+          />
+          <div className="stash-snapshot-actions">
+            <button className="button button-outline" type="button" onClick={previewAtlasProgressReport} disabled={!selectedLeague || !atlasProgressInput.trim()}>
+              Preview report
+            </button>
+            {atlasProgressDraft?.leagueId === selectedLeagueId && (
+              <button className="button button-primary" type="button" onClick={saveAtlasProgressReport}>
+                Confirm and save to league
+              </button>
+            )}
+            {selectedLeagueAtlasProgress && (
+              <button className="text-link" type="button" onClick={clearLeagueAtlasProgress}>Remove report</button>
+            )}
+          </div>
+          {atlasProgressDraft?.leagueId === selectedLeagueId && (
+            <div className="stash-snapshot-status" role="region" aria-label="Atlas progress preview">
+              <strong>{atlasProgressDraft.report.totalPoints} Atlas points earned · {atlasProgressDraft.report.allocatedPoints} allocated</strong>
+              {atlasProgressDraft.report.sources.length > 0 ? (
+                <ul className="atlas-progress-sources">
+                  {atlasProgressDraft.report.sources.map((source) => (
+                    <li key={source.label}><span>{source.label}</span><strong>{source.completed}/{source.total}</strong></li>
+                  ))}
+                </ul>
+              ) : <span>No source rows were recognized; only the total and allocated counts will be saved.</span>}
+              <span>These are league-scoped counts from pasted text. They do not identify allocated Atlas nodes or select an Atlas farming strategy.</span>
+            </div>
+          )}
+          {selectedLeagueAtlasProgress && (
+            <div className="stash-snapshot-status" role="status">
+              <strong>{selectedLeagueAtlasProgress.totalPoints} Atlas points earned · {selectedLeagueAtlasProgress.allocatedPoints} allocated</strong>
+              <span>League report imported {new Date(selectedLeagueAtlasProgress.importedAt).toLocaleString()} · {selectedLeagueAtlasProgress.sources.length} source counts retained</span>
+            </div>
+          )}
+          {atlasProgressMessage && (
+            <div className={"stash-import-message stash-import-" + atlasProgressMessage.kind} role="status">
+              {atlasProgressMessage.text}
+            </div>
+          )}
+          <p className="modal-small-note">The report's original text is not persisted. Source labels are shown for review only; changes to GGG's output format will be reported as unsupported instead of guessed.</p>
         </section>
         <section className="settings-section">
           <div>

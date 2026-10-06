@@ -120,6 +120,8 @@ export interface ProgressionRouteDataVersion {
   readonly buildManifestSchema: 1;
   readonly progressionSnapshot: string;
   readonly stashSnapshot: string | null;
+  /** ID of the imported league-scoped /atlaspassives summary, when present. */
+  readonly atlasProgressSnapshot: string | null;
   /** "not-loaded" or the ID and patch of an imported local knowledge pack. */
   readonly curatedData: string;
 }
@@ -159,6 +161,12 @@ export interface RouteProgressionSnapshot {
   readonly characterLevel?: number;
   /** Count only; it is not enough to infer which passive nodes are missing. */
   readonly passiveAllocationCount?: number;
+  /** Manual league-scoped summary; source labels are not interpreted as advice. */
+  readonly atlasProgress?: {
+    readonly version: string;
+    readonly totalPoints: number;
+    readonly allocatedPoints: number;
+  };
 }
 
 export interface RouteStashItem {
@@ -234,6 +242,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     buildManifestSchema: build.schemaVersion,
     progressionSnapshot: progression.version,
     stashSnapshot: stash?.version ?? null,
+    atlasProgressSnapshot: progression.atlasProgress?.version ?? null,
     curatedData: routeKnowledgePack ? `${routeKnowledgePack.id}@${routeKnowledgePack.contentVersion}` : "not-loaded",
   };
   const routeEvidence: RouteEvidence = {
@@ -252,7 +261,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
   const progressionEvidence: RouteEvidence = {
     source: "progression_snapshot",
     version: progression.version,
-    detail: `Current character stage is ${stageLabel(progression.stage)}${progression.characterLevel === undefined ? "" : ` at level ${progression.characterLevel}`}.`,
+    detail: `Current character stage is ${stageLabel(progression.stage)}${progression.characterLevel === undefined ? "" : ` at level ${progression.characterLevel}`}.${progression.atlasProgress ? ` The selected league's manually imported /atlaspassives summary records ${progression.atlasProgress.totalPoints} Atlas points earned and ${progression.atlasProgress.allocatedPoints} allocated; source labels are preserved as report text and are not mapped to recommendations.` : ""}`,
   };
   const stashEvidence: RouteEvidence | undefined = stash
     ? {

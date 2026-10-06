@@ -28,16 +28,31 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
+
+  playwright:
+    name: Playwright desktop and UI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium
         run: pnpm exec playwright install chromium
-      - name: Run desktop UI smoke test
+      - name: Run Playwright workflows
         run: pnpm test:e2e
-      - name: Save Playwright UI screenshots
+      - name: Save Playwright screenshots
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-ui-screenshots
           path: |
+            test-results/**/atlas-progress-preview.png
             test-results/**/league-stash-import.png
             test-results/**/current-character-route.png
           if-no-files-found: ignore

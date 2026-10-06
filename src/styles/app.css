@@ -529,6 +529,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .settings-section input::placeholder { color: #737b78; }
 .stash-snapshot-import { display: flex; flex-direction: column; gap: 12px; }
 .stash-snapshot-import > div:first-child p { margin-bottom: 0; }
+.atlas-progress-import { display: flex; flex-direction: column; gap: 12px; }
+.atlas-progress-import > div:first-child p { margin-bottom: 0; }
+.atlas-progress-import textarea { display: block; width: min(100%, 720px); min-height: 110px; padding: 10px 12px; border: 1px solid #434a49; border-radius: 4px; color: #eee4d4; background: #171c1d; font: 11px/1.5 "Cascadia Code", Consolas, monospace; resize: vertical; }
+.atlas-progress-import textarea:disabled { opacity: .55; }
+.atlas-progress-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; margin: 7px 0; padding: 0; list-style: none; }
+.atlas-progress-sources li { display: flex; justify-content: space-between; gap: 12px; color: #a5b49b; font-size: 10px; }
+.atlas-progress-sources li span { overflow-wrap: anywhere; }
+.atlas-progress-sources li strong { flex: 0 0 auto; color: #d5ddcc; font: inherit; }
 .stash-snapshot-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
 .stash-snapshot-actions .button { min-height: 37px; font-size: 11px; }
 .stash-snapshot-actions .text-link { padding: 8px 4px; font-size: 11px; }
