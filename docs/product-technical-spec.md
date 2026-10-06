@@ -214,8 +214,8 @@ GGG permits independently running executable apps when they use a public OAuth c
 
 ### V1 verification record (2026-10-05)
 
-- Passed: 100 unit tests across 13 files, the HTTP cache max-stale regression check, TypeScript check, Vite production build, and all 3 Playwright flows. Windows CI verifies the Electron shell, league-first PoB character flow, player-assigned PoB tree levels, exact-build level checkpoints, Atlas/source evidence, and route-pack mechanic details.
-- The [0.2.2 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/tag/preview-v0.2.2) is public. The 101,381,529-byte portable executable passed product/version and Authenticode `NotSigned` checks; its published SHA-256 is `440bbaf22d7bf8169dc9c3b8ea010b50abc88bdd70aac389505e69b348fb012b`. OAuth sync remains unavailable while GGG is unable to process new application registrations. A reviewed, bundled progression guide and verified farming/crafting data are still outstanding.
+- Passed: 107 unit tests across 14 files, the HTTP cache and `sprintf-js` regression checks, TypeScript check, Vite production build, and all 3 Playwright flows. Windows CI verifies the Electron shell, league-first PoB character flow, local stash import and exact gear coverage, player-assigned PoB tree levels, route checkpoints, and route-pack mechanic details.
+- The [0.2.3 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/tag/preview-v0.2.3) is public. The 101,386,948-byte portable executable passed product/version and Authenticode `NotSigned` checks; its published SHA-256 is `34c3f4a54b73dee3181d79f23b1a79907cb3e469739f07f8ff857c8000ab65ea`. `source-map-js` is pinned to 1.2.2; the registry audit still lists the locally patched `sprintf-js` 1.1.3 build dependency because no fixed package version is published. OAuth sync remains unavailable while GGG is unable to process new application registrations. A reviewed, bundled progression guide and verified farming/crafting data are still outstanding.
 
 ## 12. External references
 
