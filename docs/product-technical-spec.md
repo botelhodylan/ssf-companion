@@ -205,7 +205,7 @@ GGG permits independently running executable apps when they use a public OAuth c
 
 ## 11. Quality gates
 
-- Automated tests currently cover PoB envelope decode/invalid inputs, supported-link recognition, XML normalization/warnings, role weighting, deterministic score/reason generation, stash/clutter signals, passive-tree topology/order, local FilterBlade audit, Markdown/JSON/CSV exports, and spreadsheet-formula guards. Electron IPC/fetch-route security still needs focused adapter tests.
+- Automated tests currently cover PoB envelope decode/invalid inputs, supported-link recognition, XML normalization/warnings, role weighting, deterministic score/reason generation, stash/clutter signals, passive-tree topology/order, route-pack validation and build-matched level checkpoints, local FilterBlade audit, Markdown/JSON/CSV exports, and spreadsheet-formula guards. Electron IPC/fetch-route security still needs focused adapter tests.
 - Manual desktop QA covers launch, resizing, league-before-character behavior, build import errors/success, role changes, explanation updates, export, and offline startup.
 - UI QA covers the full desktop workspace at 1440×1000 and one narrow window, keyboard labels/focus, and Electron console errors.
 - Packaging QA launches the generated portable Windows executable and verifies its source build metadata.
@@ -213,8 +213,8 @@ GGG permits independently running executable apps when they use a public OAuth c
 
 ### V1 verification record (2026-10-05)
 
-- Passed: 55 unit tests, the HTTP cache max-stale regression check, TypeScript check, and Vite production build. The FilterBlade options parser was run against the current public PoE 1 `CustomizerDefault.options` asset: it indexed 355 literal rule labels from 521 QuickUI calls, left 166 generated/unsupported entries unmapped, and found no duplicate IDs. Filter audit handoff tests cover matched labels while preserving candidate-only warnings and current presentation.
-- A Windows portable preview was packaged and launched earlier; that local artifact was unsigned and unpublished. Still manual: Pobb.in/Maxroll requests, local file picker, native save dialogs, full-resolution resizing, and signed/public binary distribution. OAuth sync remains unavailable pending GGG registration.
+- Passed: 96 unit tests across 13 files, the HTTP cache max-stale regression check, TypeScript check, Vite production build, and all 3 Playwright flows. Windows CI verifies the Electron shell, league-first PoB character flow, exact-build level checkpoint UI, Atlas/source evidence, and route-pack mechanic details.
+- The [0.2.1 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/tag/preview-v0.2.1) is public. The 101,380,258-byte portable executable passed product/version and Authenticode `NotSigned` checks; its published SHA-256 is `24b0eb433104cbc341c34ce3c6df1de6e569d8dd76669a8e546570e69d191048`. OAuth sync remains unavailable while GGG is unable to process new application registrations. A reviewed, bundled progression guide and verified farming/crafting data are still outstanding.
 
 ## 12. External references
 
