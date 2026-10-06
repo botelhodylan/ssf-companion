@@ -808,6 +808,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .route-mechanic-playbook > b { color: #c6d39b; }
 .route-evidence code, .route-version-detail code { display: block; overflow-wrap: anywhere; margin-top: 5px; color: #8c958d; font: 9px/1.5 "Cascadia Code", Consolas, monospace; }
 .passive-node-id-list { margin-top: 8px; color: #a7aaa2; font-size: 9px; line-height: 1.5; }
+.passive-spec-level-assignment { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 8px; border: 1px solid #3b433d; background: #171d1b; }
+.passive-spec-level-assignment label { color: #c9c2b5; font-size: 9px; font-weight: 600; }
+.passive-spec-level-assignment input { width: 78px; min-height: 30px; padding: 4px 7px; border: 1px solid #4c554e; border-radius: 3px; background: #111617; color: #eee4d4; font: 11px "Cascadia Code", Consolas, monospace; }
+.passive-spec-level-note { margin: 5px 0 0; color: #888f88; font-size: 8px; line-height: 1.45; }
 .passive-node-id-list summary { color: #c7a16f; cursor: pointer; }
 .passive-node-id-list p { overflow-wrap: anywhere; }
 .passive-allocation-order { margin-top: 10px; padding: 8px; border: 1px solid #343b39; background: #171d1d; }

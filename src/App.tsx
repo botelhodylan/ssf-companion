@@ -57,6 +57,7 @@ type StoredBuild = {
   characterId?: string;
 };
 type StoredGoal = { buildId: string; goal: ItemGoal };
+type StoredPassiveSpecLevel = { buildId: string; specId: number; level: number };
 const GITHUB_ISSUES_URL = "https://github.com/botelhodylan/ssf-companion/issues";
 
 const STORAGE = {
@@ -64,6 +65,7 @@ const STORAGE = {
   characters: "ssf-companion:characters:v1",
   builds: "ssf-companion:builds:v1",
   goals: "ssf-companion:goals:v1",
+  passiveSpecLevels: "ssf-companion:passive-spec-levels:v1",
   leagueId: "ssf-companion:selected-league:v1",
   characterId: "ssf-companion:selected-character:v1",
   contact: "ssf-companion:pobb-contact:v2",
@@ -212,6 +214,7 @@ export default function App() {
   const [characters, setCharacters] = useStoredValue<StoredCharacter[]>(STORAGE.characters, []);
   const [savedBuilds, setSavedBuilds] = useStoredValue<StoredBuild[]>(STORAGE.builds, []);
   const [savedGoals, setSavedGoals] = useStoredValue<StoredGoal[]>(STORAGE.goals, []);
+  const [savedPassiveSpecLevels, setSavedPassiveSpecLevels] = useStoredValue<StoredPassiveSpecLevel[]>(STORAGE.passiveSpecLevels, []);
   const [selectedLeagueId, setSelectedLeagueId] = useStoredValue<string>(STORAGE.leagueId, "");
   const [selectedCharacterId, setSelectedCharacterId] = useStoredValue<string>(STORAGE.characterId, "");
   const [pobbContact, setPobbContact] = useStoredValue<string>(
@@ -327,6 +330,9 @@ export default function App() {
       currentBuild: visibleBuilds.find((build) => build.role === "ACTIVE"),
       passiveTreeData,
       routeKnowledgePack,
+      passiveSpecLevels: savedPassiveSpecLevels
+        .filter((assignment) => assignment.buildId === selectedBuild.id)
+        .map(({ specId, level }) => ({ specId, level })),
       progression: {
         stage,
         source,
@@ -334,7 +340,7 @@ export default function App() {
         ...(selectedCharacter?.level ? { characterLevel: selectedCharacter.level } : {}),
       },
     });
-  }, [selectedBuild, visibleBuilds, selectedCharacter, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData, routeKnowledgePack]);
+  }, [selectedBuild, visibleBuilds, selectedCharacter, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData, routeKnowledgePack, savedPassiveSpecLevels]);
   const selectedRouteStep = progressionRoute?.steps.find((step) => step.id === selectedRouteStepId)
     ?? progressionRoute?.steps[0];
 
@@ -1419,6 +1425,29 @@ export default function App() {
                         <div className="route-evidence">
                           <span>Spec {selectedRouteStep.passiveTree.specId} · {selectedRouteStep.passiveTree.specName} · tree {selectedRouteStep.passiveTree.treeVersion ?? "unknown"}</span>
                           <p>{selectedRouteStep.passiveTree.targetNodeCount} target node IDs · comparison: {selectedRouteStep.passiveTree.comparison.replaceAll("_", " ")}</p>
+                          <div className="passive-spec-level-assignment">
+                            <label htmlFor={`passive-spec-level-${selectedBuild?.id ?? "build"}-${selectedRouteStep.passiveTree.specId}`}>Use this tree at level</label>
+                            <input
+                              id={`passive-spec-level-${selectedBuild?.id ?? "build"}-${selectedRouteStep.passiveTree.specId}`}
+                              type="number"
+                              min={1}
+                              max={100}
+                              step={1}
+                              value={savedPassiveSpecLevels.find((assignment) => assignment.buildId === selectedBuild?.id && assignment.specId === selectedRouteStep.passiveTree?.specId)?.level ?? ""}
+                              onChange={(event) => {
+                                if (!selectedBuild) return;
+                                const rawLevel = event.currentTarget.value;
+                                setSavedPassiveSpecLevels((previous) => {
+                                  const remaining = previous.filter((assignment) => !(assignment.buildId === selectedBuild.id && assignment.specId === selectedRouteStep.passiveTree?.specId));
+                                  if (rawLevel === "") return remaining;
+                                  const level = Number(rawLevel);
+                                  if (!Number.isInteger(level) || level < 1 || level > 100) return previous;
+                                  return [...remaining, { buildId: selectedBuild.id, specId: selectedRouteStep.passiveTree!.specId, level }];
+                                });
+                              }}
+                            />
+                          </div>
+                          <p className="passive-spec-level-note">Assign levels from your guide to turn its saved trees into route checkpoints. The app does not infer these levels from node IDs or PoB spec order.</p>
                           <div className={`passive-allocation-order passive-allocation-${selectedRouteStep.passiveTree.allocationOrderStatus}`}>
                             <div>
                               <strong>Suggested allocation order</strong>
@@ -1547,7 +1576,7 @@ export default function App() {
                         {selectedRouteStep.progressionCheckpoint.atlasShareUrl && <button className="text-link route-evidence-link" type="button" onClick={() => void openTrustedLink(selectedRouteStep.progressionCheckpoint!.atlasShareUrl!)}>Open Atlas tree share <ExternalLink size={12} /></button>}
                         <strong>Checkpoint steps</strong>
                         <ol>{selectedRouteStep.progressionCheckpoint.steps.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ol>
-                        <p className="route-step-data-note">The level and actions come from the imported route pack; compare the objectives with your character before relying on them.</p>
+                        <p className="route-step-data-note">{selectedRouteStep.progressionCheckpoint.origin === "route_pack" ? "The level and actions come from the imported route pack; compare the objectives with your character before relying on them." : "You assigned this level to an imported PoB tree. Verify it against your guide, then compare with your character before allocating or refunding nodes."}</p>
                       </div>
                     )}
                     {selectedRouteStep.knowledgePlan && (

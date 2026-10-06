@@ -4,6 +4,12 @@ This project follows a simple release history. Changes are grouped by version; G
 
 ## Unreleased
 
+## 0.2.2 Preview
+
+- Assign guide-provided levels to imported PoB passive specs from the progression route inspector; the app creates explicit local tree checkpoints and identifies the next one from the selected character level.
+- Keep these level labels as player annotations with route evidence; never infer them from PoB spec order or node IDs, and avoid duplicating specs already linked by a cited route pack.
+- Extend unit and Playwright coverage through PoB import, local spec-level assignment, next-checkpoint rendering, and clearing the assignment.
+
 ## 0.2.1 Preview
 
 - Keep bundled example builds out of a player profile after they create a league or character, or import a build.

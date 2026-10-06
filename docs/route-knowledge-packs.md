@@ -27,6 +27,8 @@ A progression plan has `id`, `name`, a `match` with at least one of `className`,
 
 The route marks the first checkpoint above the selected character's current level as **Next checkpoint**. It asks for the current level when that fact is unavailable, and marks a named passive spec as missing until the target PoB includes it. The imported pack supplies the level association and actions: the app does not infer leveling order or timing from PoB node IDs. Checkpoint steps remain low-confidence, cited local content for the player to review.
 
+Players can also assign a level directly to an imported PoB passive spec from its route inspector. This creates a local review checkpoint without a route pack and is useful when a guide's PoB contains separately named leveling trees. The level annotation is stored on this device, appears in route evidence as a player assignment, and is not inferred from PoB spec order or tree nodes. A matching named spec already linked by the imported pack is not duplicated.
+
 ## Acquisition route fields
 
 An acquisition route has `id`, `match`, `stage`, `method`, `title`, `steps`, and `sourceIds`. `match` must contain `itemNames` and/or `baseTypes`; punctuation and case are normalized for exact matching. `stage` is `campaign`, `early_mapping`, `atlas`, or `endgame`. Optional Atlas fields are `atlasTreeName`, `atlasNodeNames`, and the validated `atlasShareUrl`.

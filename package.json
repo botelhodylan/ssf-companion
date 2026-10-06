@@ -1,6 +1,6 @@
 {
   "name": "ssf-companion",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "private": true,
   "packageManager": "pnpm@11.25.0",

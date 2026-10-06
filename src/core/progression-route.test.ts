@@ -328,6 +328,90 @@ describe("buildProgressionRoute", () => {
     expect(route.steps.filter((step) => step.kind === "progression_checkpoint")).toEqual([]);
   });
 
+  it("turns player-assigned PoB spec levels into ordered tree checkpoints without guessing their levels", () => {
+    const build: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      passiveSpecs: [
+        { id: 1, name: "Campaign tree", treeVersion: "3_26", allocatedNodeIds: [100, 101] },
+        { id: 2, name: "Mapping tree", treeVersion: "3_26", allocatedNodeIds: [100, 110] },
+      ],
+    };
+    const route = buildProgressionRoute({
+      build,
+      progression: PROGRESSION,
+      passiveSpecLevels: [{ specId: 2, level: 90 }, { specId: 1, level: 35 }, { specId: 2, level: 91 }],
+    });
+    const checkpoints = route.steps.filter((step) => step.kind === "progression_checkpoint");
+
+    expect(checkpoints).toHaveLength(2);
+    expect(checkpoints[0]).toMatchObject({
+      title: "Level 35: PoB tree · Campaign tree",
+      confidence: "medium",
+      progressionCheckpoint: { level: 35, passiveSpecName: "Campaign tree", origin: "pob_spec_annotation", isNextCheckpoint: false },
+    });
+    expect(checkpoints[1]).toMatchObject({
+      title: "Next checkpoint: PoB tree · Mapping tree",
+      confidence: "medium",
+      progressionCheckpoint: { level: 91, passiveSpecName: "Mapping tree", origin: "pob_spec_annotation", isNextCheckpoint: true },
+    });
+    expect(checkpoints[1].evidence).toContainEqual(expect.objectContaining({
+      source: "player_annotation",
+      detail: expect.stringContaining("You assigned “Mapping tree” to level 91"),
+    }));
+  });
+
+  it("ignores invalid or stale PoB spec level assignments", () => {
+    const build: BuildManifest = { ...BUILD, role: "NEXT", passiveSpecs: [{ id: 1, name: "Campaign tree", allocatedNodeIds: [] }] };
+    const route = buildProgressionRoute({
+      build,
+      progression: PROGRESSION,
+      passiveSpecLevels: [
+        { specId: 1, level: 0 },
+        { specId: 1, level: 101 },
+        { specId: 2, level: 40 },
+      ],
+    });
+
+    expect(route.steps.filter((step) => step.kind === "progression_checkpoint")).toEqual([]);
+  });
+
+  it("does not mark an assigned tree as next when current character level is unknown", () => {
+    const build: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      passiveSpecs: [{ id: 1, name: "Level 90 tree", allocatedNodeIds: [] }],
+    };
+    const route = buildProgressionRoute({
+      build,
+      progression: { stage: "unknown", version: "unset", source: "unknown" },
+      passiveSpecLevels: [{ specId: 1, level: 90 }],
+    });
+    const checkpoint = route.steps.find((step) => step.kind === "progression_checkpoint");
+
+    expect(checkpoint).toMatchObject({ status: "needs_personal_data", progressionCheckpoint: { isNextCheckpoint: false } });
+    expect(checkpoint?.requiredData).toContainEqual(expect.objectContaining({ key: "current_character_level" }));
+  });
+
+  it("avoids duplicating a PoB tree checkpoint already linked by a route pack", () => {
+    const build: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      skills: { mainSkillName: "Winter Orb", gemRoleMethod: "name_suffix_heuristic", supportGemNames: [], groups: [] },
+      passiveSpecs: [{ id: 1, name: "Atlas", treeVersion: "3_26", allocatedNodeIds: [] }],
+    };
+    const pack = parsePoe1RouteKnowledgePack(JSON.stringify(PROGRESSION_PACK));
+    const route = buildProgressionRoute({
+      build,
+      progression: PROGRESSION,
+      routeKnowledgePack: pack,
+      passiveSpecLevels: [{ specId: 1, level: 90 }],
+    });
+    const checkpoints = route.steps.filter((step) => step.kind === "progression_checkpoint");
+
+    expect(checkpoints.map((step) => step.progressionCheckpoint?.origin)).toEqual(["route_pack", "route_pack"]);
+  });
+
   it("attaches the cited mechanic playbook to its exact farm route and explains the mechanic loop", () => {
     const pack = parsePoe1RouteKnowledgePack(JSON.stringify({
       schemaVersion: 1,

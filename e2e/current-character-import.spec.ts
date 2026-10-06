@@ -134,6 +134,17 @@ test("imports a PoB into a league character and opens its progression route", as
   });
   await expect(page.getByRole("region", { name: "Local passive tree data" }).getByRole("status"))
     .toContainText("tree 3_26");
+  const targetPassiveStep = page.getByRole("button", { name: /PoB tree spec: Atlas/ });
+  await targetPassiveStep.click();
+  const specLevelInput = inspector.getByLabel("Use this tree at level");
+  await specLevelInput.fill("85");
+  const assignedCheckpoint = page.getByRole("button", { name: /Next checkpoint: PoB tree · Atlas/ });
+  await expect(assignedCheckpoint).toBeVisible();
+  await assignedCheckpoint.click();
+  await expect(inspector).toContainText("You assigned this level to an imported PoB tree");
+  await targetPassiveStep.click();
+  await inspector.getByLabel("Use this tree at level").fill("");
+  await expect(assignedCheckpoint).toHaveCount(0);
   await page.getByTestId("route-pack-input").setInputFiles({
     name: "synthetic-winter-orb-route.json",
     mimeType: "application/json",
@@ -152,7 +163,6 @@ test("imports a PoB into a league character and opens its progression route", as
   await expect(inspector).toContainText("Review the imported Atlas PoB spec.");
   await expect(inspector.getByRole("button", { name: "Open source" })).toHaveCount(1);
   await expect(inspector.getByRole("button", { name: "Open Atlas tree share" })).toHaveCount(1);
-  const targetPassiveStep = page.getByRole("button", { name: /PoB tree spec: Atlas/ });
   await targetPassiveStep.click();
   await expect(inspector).toContainText("up to ten nodes from this traversal");
   await inspector.getByText("View 2 traversal checkpoints · 11 nodes").click();

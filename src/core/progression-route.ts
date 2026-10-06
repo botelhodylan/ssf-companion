@@ -3,12 +3,13 @@ import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeData
 import { acquisitionRoutesForGoal, craftPlanForGoal, mechanicPlanById, progressionPlansForBuild, type Poe1ProgressionCheckpoint, type Poe1RouteKnowledgePack, type Poe1RouteKnowledgePlan } from "./poe1-route-pack";
 import type { BuildManifest, BuildRole, BuildSkillGroup, EquipmentItemDetailFacts, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
 
-export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.8.0" as const;
+export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.9.0" as const;
 
 export type RouteEvidenceSource =
   | "route_rules"
   | "build_manifest"
   | "progression_snapshot"
+  | "player_annotation"
   | "stash_snapshot"
   | "local_tree_export"
   | "route_knowledge_pack";
@@ -86,9 +87,16 @@ export interface SkillTransitionComparison {
   readonly removedSupportGems: readonly string[];
 }
 
-export interface ProgressionCheckpointDetail extends Poe1ProgressionCheckpoint {
+export interface ProgressionCheckpointDetail extends Omit<Poe1ProgressionCheckpoint, "sourceIds"> {
+  readonly sourceIds?: readonly string[];
   readonly planName: string;
   readonly isNextCheckpoint: boolean;
+  readonly origin: "route_pack" | "pob_spec_annotation";
+}
+
+export interface PassiveSpecLevelAssignment {
+  readonly specId: number;
+  readonly level: number;
 }
 
 export interface RouteEvidence {
@@ -176,6 +184,8 @@ export interface ProgressionRouteInput {
   readonly stash?: RouteStashSnapshot | null;
   readonly passiveTreeData?: PassiveTreeDataset | null;
   readonly routeKnowledgePack?: Poe1RouteKnowledgePack | null;
+  /** Player-assigned level labels for imported target PoB passive specs. */
+  readonly passiveSpecLevels?: readonly PassiveSpecLevelAssignment[];
 }
 
 export interface ProgressionRoute {
@@ -215,7 +225,7 @@ function stageLabel(stage: ProgressionStage | "unknown"): string {
  * patch-versioned player-selected knowledge pack.
  */
 export function buildProgressionRoute(input: ProgressionRouteInput): ProgressionRoute {
-  const { build, currentBuild, progression, stash, passiveTreeData, routeKnowledgePack } = input;
+  const { build, currentBuild, progression, stash, passiveTreeData, routeKnowledgePack, passiveSpecLevels } = input;
   const dataVersion: ProgressionRouteDataVersion = {
     routeRules: POE1_ROUTE_RULES_VERSION,
     buildManifestSchema: build.schemaVersion,
@@ -279,6 +289,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     build,
     progression,
     plans: progressionPlansForBuild(build, routeKnowledgePack),
+    passiveSpecLevels: passiveSpecLevels ?? [],
     dataVersion,
     routeEvidence,
     progressionEvidence,
@@ -915,16 +926,87 @@ function buildProgressionCheckpointSteps(input: {
   readonly build: BuildManifest;
   readonly progression: RouteProgressionSnapshot;
   readonly plans: ReturnType<typeof progressionPlansForBuild>;
+  readonly passiveSpecLevels: readonly PassiveSpecLevelAssignment[];
   readonly dataVersion: ProgressionRouteDataVersion;
   readonly routeEvidence: RouteEvidence;
   readonly progressionEvidence: RouteEvidence;
   readonly buildEvidence: (detail: string, goal?: ItemGoal) => RouteEvidence;
   readonly packEvidence: (sourceIds: readonly string[], entryId: string) => RouteEvidence[];
 }): Omit<ProgressionRouteStep, "order">[] {
-  const { build, progression, plans, dataVersion, routeEvidence, progressionEvidence, buildEvidence, packEvidence } = input;
+  const { build, progression, plans, passiveSpecLevels, dataVersion, routeEvidence, progressionEvidence, buildEvidence, packEvidence } = input;
   const normalize = poe1Provider.normalizeItemIdentity;
   const currentLevel = progression.characterLevel;
-  return plans.flatMap((plan) => {
+  const specsById = new Map((build.passiveSpecs ?? []).map((spec) => [spec.id, spec]));
+  const levelsBySpecId = new Map<number, number>();
+  for (const assignment of passiveSpecLevels) {
+    if (!Number.isInteger(assignment.specId) || !Number.isInteger(assignment.level) || assignment.level < 1 || assignment.level > 100) continue;
+    if (specsById.has(assignment.specId)) levelsBySpecId.set(assignment.specId, assignment.level);
+  }
+  const assignedSpecs = [...levelsBySpecId]
+    .flatMap(([specId, level]) => {
+      const spec = specsById.get(specId);
+      return spec ? [{ spec, level }] : [];
+    })
+    .filter(({ spec }) => !plans.some((plan) => plan.checkpoints.some((checkpoint) =>
+      checkpoint.passiveSpecName && normalize(checkpoint.passiveSpecName) === normalize(spec.name ?? ""),
+    )))
+    .sort((left, right) => left.level - right.level || left.spec.id - right.spec.id);
+  const nextAssignedSpec = currentLevel === undefined
+    ? undefined
+    : assignedSpecs.find(({ level }) => level > currentLevel)?.spec.id;
+  const assignedSpecSteps = assignedSpecs.map(({ spec, level }) => {
+    const isNextCheckpoint = spec.id === nextAssignedSpec;
+    const specName = spec.name?.trim() || `Spec ${spec.id}`;
+    const requiredData: RouteDataRequirement[] = currentLevel === undefined ? [{
+      category: "personal",
+      key: "current_character_level",
+      description: "Set a current-character level to identify which assigned PoB tree comes next.",
+    }] : [];
+    const checkpoint: ProgressionCheckpointDetail = {
+      id: `pob-spec-${spec.id}`,
+      level,
+      title: `PoB tree · ${specName}`,
+      objective: `Review the imported “${specName}” passive spec assigned to level ${level}. This level was entered by you and was not inferred from node IDs or PoB spec order.`,
+      steps: [
+        `Open the “${specName}” passive spec in the imported PoB.`,
+        "Compare it with the current character tree and confirm available quest points and refund costs before reallocating.",
+      ],
+      ...(spec.name?.trim() ? { passiveSpecName: spec.name.trim() } : {}),
+      planName: `${build.name} · player-assigned PoB trees`,
+      isNextCheckpoint,
+      origin: "pob_spec_annotation",
+    };
+    const action = isNextCheckpoint
+      ? `NEXT CHECKPOINT · level ${level}. Open the imported “${specName}” spec and review its nodes. Current character level: ${currentLevel}.`
+      : currentLevel === undefined
+        ? `This imported PoB spec is assigned to level ${level}. Set the current character level to identify which tree is next.`
+        : `This imported PoB spec is assigned to level ${level}. Current character level: ${currentLevel}; review it as an earlier or later guide checkpoint.`;
+    return {
+      id: `progression-checkpoint:${build.id}:pob-spec:${spec.id}`,
+      kind: "progression_checkpoint" as const,
+      status: requiredData.length ? routeStatus(requiredData) : "ready" as const,
+      title: `${isNextCheckpoint ? "Next checkpoint" : `Level ${level}`}: ${checkpoint.title}`,
+      action,
+      confidence: "medium" as const,
+      dataVersion,
+      evidence: [
+        routeEvidence,
+        buildEvidence(`This local checkpoint links imported PoB passive spec ${spec.id} (${specName}) to the player-assigned level ${level}. The assignment is not inferred from the tree.`),
+        {
+          source: "player_annotation" as const,
+          version: "local-passive-spec-levels-v1",
+          reference: `${build.id}/passive-spec/${spec.id}`,
+          detail: `You assigned “${specName}” to level ${level}. Verify the label against your build guide before following it.`,
+        },
+        progressionEvidence,
+      ],
+      requiredData,
+      target: specName,
+      progressionCheckpoint: checkpoint,
+    };
+  });
+
+  const routePackSteps = plans.flatMap((plan) => {
     const nextCheckpointId = currentLevel === undefined
       ? undefined
       : plan.checkpoints.find((checkpoint) => checkpoint.level > currentLevel)?.id;
@@ -950,11 +1032,11 @@ function buildProgressionCheckpointSteps(input: {
           : `This imported ${plan.name} checkpoint is for level ${checkpoint.level}. ${checkpoint.objective} Current character level: ${currentLevel}; review earlier steps against your actual progress.`;
       return {
         id: `progression-checkpoint:${build.id}:${plan.id}:${checkpoint.id}`,
-        kind: "progression_checkpoint",
+        kind: "progression_checkpoint" as const,
         status: requiredData.length ? routeStatus(requiredData) : "ready",
         title: `${isNextCheckpoint ? "Next checkpoint" : `Level ${checkpoint.level}`}: ${checkpoint.title}`,
         action,
-        confidence: "low",
+        confidence: "low" as const,
         dataVersion,
         evidence: [
           routeEvidence,
@@ -964,10 +1046,11 @@ function buildProgressionCheckpointSteps(input: {
         ],
         requiredData,
         target: plan.name,
-        progressionCheckpoint: { ...checkpoint, planName: plan.name, isNextCheckpoint },
+        progressionCheckpoint: { ...checkpoint, planName: plan.name, isNextCheckpoint, origin: "route_pack" as const },
       };
     });
   });
+  return [...assignedSpecSteps, ...routePackSteps];
 }
 
 function buildPassiveTreeSteps(input: {
