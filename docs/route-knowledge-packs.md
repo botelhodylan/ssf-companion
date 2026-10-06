@@ -1,6 +1,6 @@
 # Local PoE 1 route knowledge packs
 
-SSF Companion can read an optional local JSON file to add source-backed farming, crafting, and mechanic-operation steps to a progression route. The pack stays on the player's computer. No gameplay data is bundled yet, and an imported pack is always labeled as local data that the player should review.
+SSF Companion can read an optional local JSON file to add source-backed level checkpoints, farming, crafting, and mechanic-operation steps to a progression route. The pack stays on the player's computer. No gameplay data is bundled yet, and an imported pack is always labeled as local data that the player should review.
 
 Import it from **Progression route → Import a PoE 1 route knowledge pack**. Files are limited to 1.5 MB. The app shows the pack's content version and uses only exact normalized item-name/base-type matches; abstract tags do not trigger a route.
 
@@ -17,8 +17,15 @@ Import it from **Progression route → Import a PoE 1 route knowledge pack**. Fi
 | `acquisitionRoutes` | Optional exact-match campaign, vendor, drop, divination card, league mechanic, boss, or Atlas acquisition entries. Trade methods are rejected for SSF. |
 | `craftPlans` | Optional exact-match, ordered craft instructions. |
 | `mechanicPlans` | Optional reusable, source-backed playbooks for league-mechanic setup, encounter loops, decision rules, and stop conditions. |
+| `progressionPlans` | Optional build-matched sequences of level checkpoints, with objectives, ordered steps, optional named PoB passive specs, and optional official Atlas tree shares. |
 
-Each acquisition route, craft plan, and mechanic plan must reference one or more IDs from `sources`. URLs must use HTTPS and may not include embedded credentials. Atlas tree names or node labels require an official `pathofexile.com` Atlas share URL; the app validates that URL and offers to open it.
+Each acquisition route, craft plan, mechanic plan, and progression checkpoint must reference one or more IDs from `sources`. URLs must use HTTPS and may not include embedded credentials. Atlas tree names or node labels require an official `pathofexile.com` Atlas share URL; the app validates that URL and offers to open it.
+
+## Build progression plans
+
+A progression plan has `id`, `name`, a `match` with at least one of `className`, `ascendancy`, or `mainSkillName`, and one or more checkpoints. Every supplied selector must exactly match the imported target build after case and punctuation normalization; plans with a different class, ascendancy, or main skill are ignored. Each checkpoint has a unique `id`, an integer `level` from 1 to 100, `title`, `objective`, ordered `steps`, and `sourceIds`. Levels must be strictly increasing. Optional `passiveSpecName` links the checkpoint to a named passive spec in the imported target PoB. Optional Atlas tree names or node labels must include a validated official `atlasShareUrl`.
+
+The route marks the first checkpoint above the selected character's current level as **Next checkpoint**. It asks for the current level when that fact is unavailable, and marks a named passive spec as missing until the target PoB includes it. The imported pack supplies the level association and actions: the app does not infer leveling order or timing from PoB node IDs. Checkpoint steps remain low-confidence, cited local content for the player to review.
 
 ## Acquisition route fields
 

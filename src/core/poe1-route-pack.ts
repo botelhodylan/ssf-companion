@@ -1,6 +1,6 @@
 import { poe1Provider } from "./game-provider";
 import { parseAtlasTreeShareUrl } from "./atlas-tree-import";
-import type { ItemGoal, ProgressionStage } from "./types";
+import type { BuildManifest, ItemGoal, ProgressionStage } from "./types";
 
 export interface Poe1RoutePackSource {
   readonly id: string;
@@ -66,6 +66,31 @@ export interface Poe1MechanicPlan {
   readonly sourceIds: readonly string[];
 }
 
+/** A build-specific sequence of source-backed level checkpoints. */
+export interface Poe1ProgressionPlan {
+  readonly id: string;
+  readonly name: string;
+  readonly match: {
+    readonly className?: string;
+    readonly ascendancy?: string;
+    readonly mainSkillName?: string;
+  };
+  readonly checkpoints: readonly Poe1ProgressionCheckpoint[];
+}
+
+export interface Poe1ProgressionCheckpoint {
+  readonly id: string;
+  readonly level: number;
+  readonly title: string;
+  readonly objective: string;
+  readonly steps: readonly string[];
+  readonly passiveSpecName?: string;
+  readonly atlasTreeName?: string;
+  readonly atlasNodeNames?: readonly string[];
+  readonly atlasShareUrl?: string;
+  readonly sourceIds: readonly string[];
+}
+
 /** Player-selected, patch-versioned local knowledge; no pack is bundled by default. */
 export interface Poe1RouteKnowledgePack {
   readonly schemaVersion: 1;
@@ -77,6 +102,7 @@ export interface Poe1RouteKnowledgePack {
   readonly acquisitionRoutes: readonly Poe1AcquisitionRoute[];
   readonly craftPlans: readonly Poe1CraftPlan[];
   readonly mechanicPlans: readonly Poe1MechanicPlan[];
+  readonly progressionPlans: readonly Poe1ProgressionPlan[];
 }
 
 export interface Poe1RouteKnowledgePlan {
@@ -215,7 +241,77 @@ export function parsePoe1RouteKnowledgePack(raw: string): Poe1RouteKnowledgePack
   const acquisitionRoutes = parseAcquisitionRoutes(input.acquisitionRoutes, sourceIds);
   validateMechanicPlanReferences(acquisitionRoutes, mechanicPlans);
   const craftPlans = parseCraftPlans(input.craftPlans, sourceIds);
-  return { schemaVersion: 1, game: "poe1", id, name, contentVersion, sources, acquisitionRoutes, craftPlans, mechanicPlans };
+  const progressionPlans = parseProgressionPlans(input.progressionPlans, sourceIds);
+  return { schemaVersion: 1, game: "poe1", id, name, contentVersion, sources, acquisitionRoutes, craftPlans, mechanicPlans, progressionPlans };
+}
+
+function parseProgressionPlans(value: unknown, knownSources: ReadonlySet<string>): readonly Poe1ProgressionPlan[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_RECORDS) throw new Error(`progressionPlans must be a list with at most ${MAX_RECORDS} entries.`);
+  const planIds = new Set<string>();
+  return value.map((entry, index) => {
+    const input = record(entry, `progressionPlans[${index}]`);
+    const id = boundedText(input.id, `progressionPlans[${index}].id`, 80);
+    if (!/^[a-z0-9][a-z0-9._-]{0,79}$/i.test(id) || planIds.has(id)) throw new Error(`progressionPlans[${index}].id is invalid or duplicated.`);
+    planIds.add(id);
+    const matchInput = record(input.match, `progressionPlans[${index}].match`);
+    const match = {
+      ...(matchInput.className === undefined ? {} : { className: boundedText(matchInput.className, `progressionPlans[${index}].match.className`, 100) }),
+      ...(matchInput.ascendancy === undefined ? {} : { ascendancy: boundedText(matchInput.ascendancy, `progressionPlans[${index}].match.ascendancy`, 100) }),
+      ...(matchInput.mainSkillName === undefined ? {} : { mainSkillName: boundedText(matchInput.mainSkillName, `progressionPlans[${index}].match.mainSkillName`, 160) }),
+    };
+    if (!match.className && !match.ascendancy && !match.mainSkillName) {
+      throw new Error(`progressionPlans[${index}].match needs a className, ascendancy, or mainSkillName selector.`);
+    }
+    if (!Array.isArray(input.checkpoints) || input.checkpoints.length === 0 || input.checkpoints.length > 100) {
+      throw new Error(`progressionPlans[${index}].checkpoints must contain between 1 and 100 entries.`);
+    }
+    const checkpointIds = new Set<string>();
+    let previousLevel = 0;
+    const checkpoints = input.checkpoints.map((rawCheckpoint, checkpointIndex) => {
+      const checkpoint = record(rawCheckpoint, `progressionPlans[${index}].checkpoints[${checkpointIndex}]`);
+      const checkpointId = boundedText(checkpoint.id, `progressionPlans[${index}].checkpoints[${checkpointIndex}].id`, 80);
+      if (!/^[a-z0-9][a-z0-9._-]{0,79}$/i.test(checkpointId) || checkpointIds.has(checkpointId)) {
+        throw new Error(`progressionPlans[${index}].checkpoints[${checkpointIndex}].id is invalid or duplicated.`);
+      }
+      checkpointIds.add(checkpointId);
+      if (!Number.isInteger(checkpoint.level) || Number(checkpoint.level) < 1 || Number(checkpoint.level) > 100) {
+        throw new Error(`progressionPlans[${index}].checkpoints[${checkpointIndex}].level must be an integer from 1 to 100.`);
+      }
+      const level = Number(checkpoint.level);
+      if (level <= previousLevel) throw new Error(`progressionPlans[${index}].checkpoints must be ordered by strictly increasing level.`);
+      previousLevel = level;
+      const atlasNodeNames = checkpoint.atlasNodeNames === undefined
+        ? []
+        : textList(checkpoint.atlasNodeNames, `progressionPlans[${index}].checkpoints[${checkpointIndex}].atlasNodeNames`, 60);
+      const atlasShareUrl = checkpoint.atlasShareUrl === undefined
+        ? undefined
+        : parseAtlasTreeShareUrl(boundedText(checkpoint.atlasShareUrl, `progressionPlans[${index}].checkpoints[${checkpointIndex}].atlasShareUrl`, 16_000)).sourceUrl;
+      if ((checkpoint.atlasTreeName !== undefined || atlasNodeNames.length > 0) && !atlasShareUrl) {
+        throw new Error(`progressionPlans[${index}].checkpoints[${checkpointIndex}] must include a validated GGG Atlas share URL when naming an Atlas setup.`);
+      }
+      const steps = textList(checkpoint.steps, `progressionPlans[${index}].checkpoints[${checkpointIndex}].steps`, MAX_STEPS);
+      if (!steps.length) throw new Error(`progressionPlans[${index}].checkpoints[${checkpointIndex}].steps must contain at least one action.`);
+      return {
+        id: checkpointId,
+        level,
+        title: boundedText(checkpoint.title, `progressionPlans[${index}].checkpoints[${checkpointIndex}].title`, 200),
+        objective: boundedText(checkpoint.objective, `progressionPlans[${index}].checkpoints[${checkpointIndex}].objective`, 1_000),
+        steps,
+        ...(checkpoint.passiveSpecName === undefined ? {} : { passiveSpecName: boundedText(checkpoint.passiveSpecName, `progressionPlans[${index}].checkpoints[${checkpointIndex}].passiveSpecName`, 160) }),
+        ...(checkpoint.atlasTreeName === undefined ? {} : { atlasTreeName: boundedText(checkpoint.atlasTreeName, `progressionPlans[${index}].checkpoints[${checkpointIndex}].atlasTreeName`, 160) }),
+        ...(atlasNodeNames.length ? { atlasNodeNames } : {}),
+        ...(atlasShareUrl ? { atlasShareUrl } : {}),
+        sourceIds: sourceIds(checkpoint.sourceIds, `progressionPlans[${index}].checkpoints[${checkpointIndex}].sourceIds`, knownSources),
+      };
+    });
+    return {
+      id,
+      name: boundedText(input.name, `progressionPlans[${index}].name`, 160),
+      match,
+      checkpoints,
+    };
+  });
 }
 
 function parseAcquisitionRoutes(value: unknown, knownSources: ReadonlySet<string>): readonly Poe1AcquisitionRoute[] {
@@ -391,4 +487,16 @@ export function craftPlanForGoal(goal: ItemGoal, pack?: Poe1RouteKnowledgePack |
 export function mechanicPlanById(id: string | undefined, pack?: Poe1RouteKnowledgePack | null): Poe1MechanicPlan | undefined {
   if (!id || !pack) return undefined;
   return pack.mechanicPlans.find((plan) => plan.id === id);
+}
+
+export function progressionPlansForBuild(build: BuildManifest, pack?: Poe1RouteKnowledgePack | null): readonly Poe1ProgressionPlan[] {
+  if (!pack) return [];
+  const mainSkillName = build.skills?.mainSkillName
+    ?? build.skillSets?.flatMap((set) => set.groups).find((group) => group.isMainSkillGroup)?.mainSkillName;
+  const normalize = poe1Provider.normalizeItemIdentity;
+  return pack.progressionPlans.filter((plan) =>
+    (!plan.match.className || normalize(plan.match.className) === normalize(build.className ?? ""))
+    && (!plan.match.ascendancy || normalize(plan.match.ascendancy) === normalize(build.ascendancy ?? ""))
+    && (!plan.match.mainSkillName || normalize(plan.match.mainSkillName) === normalize(mainSkillName ?? "")),
+  );
 }

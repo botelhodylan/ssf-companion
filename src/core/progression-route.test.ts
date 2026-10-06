@@ -63,6 +63,45 @@ const STASH: RouteStashSnapshot = {
   ],
 };
 
+const PROGRESSION_PACK = {
+  schemaVersion: 1,
+  game: "poe1",
+  id: "winter-orb-route",
+  name: "Winter Orb progression",
+  contentVersion: "3.29.3b",
+  sources: [{ id: "guide", title: "Synthetic guide", url: "https://example.org/winter-orb", checkedOn: "2026-10-05" }],
+  acquisitionRoutes: [],
+  craftPlans: [],
+  mechanicPlans: [],
+  progressionPlans: [{
+    id: "winter-orb-elementalist",
+    name: "Winter Orb Elementalist route",
+    match: { className: "Witch", ascendancy: "Elementalist", mainSkillName: "Winter Orb" },
+    checkpoints: [
+      {
+        id: "campaign-transition",
+        level: 65,
+        title: "Campaign transition",
+        objective: "Fixture objective for a previous checkpoint.",
+        steps: ["Review this earlier fixture checkpoint."],
+        sourceIds: ["guide"],
+      },
+      {
+        id: "atlas-entry",
+        level: 90,
+        title: "Atlas entry milestone",
+        objective: "Fixture objective for the next checkpoint.",
+        steps: ["Review the target PoB spec.", "Use the fixture Atlas tree."],
+        passiveSpecName: "Atlas",
+        atlasTreeName: "Synthetic Atlas setup",
+        atlasNodeNames: ["Synthetic Atlas node"],
+        atlasShareUrl: "https://www.pathofexile.com/atlas-skill-tree/AAAABgAAAfdPAAA=",
+        sourceIds: ["guide"],
+      },
+    ],
+  }],
+} as const;
+
 describe("buildProgressionRoute", () => {
   it("orders gear gaps, crafting, farming, passive tree, then loot-filter work", () => {
     const route = buildProgressionRoute({ build: BUILD, progression: PROGRESSION, stash: STASH });
@@ -217,6 +256,76 @@ describe("buildProgressionRoute", () => {
     });
     expect(route.steps.filter((step) => step.kind === "farming_atlas")).toHaveLength(2);
     expect(route.steps.find((step) => step.kind === "farming_atlas" && !step.goalId)?.action).toContain("Torturer's Mask");
+  });
+
+  it("adds sourced, build-matched level checkpoints and marks the next level from the current character", () => {
+    const build: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      skills: {
+        mainSkillName: "Winter Orb",
+        gemRoleMethod: "name_suffix_heuristic",
+        supportGemNames: [],
+        groups: [],
+      },
+      passiveSpecs: [{ id: 1, name: "Atlas", treeVersion: "3_26", allocatedNodeIds: [] }],
+    };
+    const pack = parsePoe1RouteKnowledgePack(JSON.stringify(PROGRESSION_PACK));
+    const route = buildProgressionRoute({ build, progression: PROGRESSION, routeKnowledgePack: pack });
+    const checkpoints = route.steps.filter((step) => step.kind === "progression_checkpoint");
+
+    expect(checkpoints).toHaveLength(2);
+    expect(checkpoints[0]).toMatchObject({ title: "Level 65: Campaign transition", status: "ready" });
+    expect(checkpoints[1]).toMatchObject({
+      title: "Next checkpoint: Atlas entry milestone",
+      status: "ready",
+      progressionCheckpoint: {
+        level: 90,
+        planName: "Winter Orb Elementalist route",
+        isNextCheckpoint: true,
+        passiveSpecName: "Atlas",
+        atlasTreeName: "Synthetic Atlas setup",
+        atlasNodeNames: ["Synthetic Atlas node"],
+      },
+    });
+    expect(checkpoints[1].evidence).toContainEqual(expect.objectContaining({
+      source: "route_knowledge_pack",
+      url: "https://example.org/winter-orb",
+      reference: "winter-orb-elementalist/atlas-entry/guide",
+    }));
+  });
+
+  it("requires current level and imported target tree data before claiming checkpoint readiness", () => {
+    const build: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      skills: { mainSkillName: "Winter Orb", gemRoleMethod: "name_suffix_heuristic", supportGemNames: [], groups: [] },
+    };
+    const pack = parsePoe1RouteKnowledgePack(JSON.stringify(PROGRESSION_PACK));
+    const route = buildProgressionRoute({
+      build,
+      progression: { stage: "unknown", version: "unset", source: "unknown" },
+      routeKnowledgePack: pack,
+    });
+    const checkpoints = route.steps.filter((step) => step.kind === "progression_checkpoint");
+
+    expect(checkpoints.every((step) => step.status === "needs_personal_data")).toBe(true);
+    expect(checkpoints.every((step) => !step.progressionCheckpoint?.isNextCheckpoint)).toBe(true);
+    expect(checkpoints[0].requiredData).toContainEqual(expect.objectContaining({ key: "current_character_level" }));
+    expect(checkpoints[1].requiredData).toContainEqual(expect.objectContaining({ key: "target_passive_spec:atlas-entry" }));
+  });
+
+  it("does not attach build checkpoints when an exact class, ascendancy, or main-skill selector fails", () => {
+    const build: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      ascendancy: "Occultist",
+      skills: { mainSkillName: "Winter Orb", gemRoleMethod: "name_suffix_heuristic", supportGemNames: [], groups: [] },
+    };
+    const pack = parsePoe1RouteKnowledgePack(JSON.stringify(PROGRESSION_PACK));
+    const route = buildProgressionRoute({ build, progression: PROGRESSION, routeKnowledgePack: pack });
+
+    expect(route.steps.filter((step) => step.kind === "progression_checkpoint")).toEqual([]);
   });
 
   it("attaches the cited mechanic playbook to its exact farm route and explains the mechanic loop", () => {

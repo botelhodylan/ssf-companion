@@ -1,9 +1,9 @@
 import { poe1Provider } from "./game-provider";
 import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeDataset } from "./passive-tree-data";
-import { acquisitionRoutesForGoal, craftPlanForGoal, mechanicPlanById, type Poe1RouteKnowledgePack, type Poe1RouteKnowledgePlan } from "./poe1-route-pack";
+import { acquisitionRoutesForGoal, craftPlanForGoal, mechanicPlanById, progressionPlansForBuild, type Poe1ProgressionCheckpoint, type Poe1RouteKnowledgePack, type Poe1RouteKnowledgePlan } from "./poe1-route-pack";
 import type { BuildManifest, BuildRole, BuildSkillGroup, EquipmentItemDetailFacts, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
 
-export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.7.0" as const;
+export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.8.0" as const;
 
 export type RouteEvidenceSource =
   | "route_rules"
@@ -19,6 +19,7 @@ export type ProgressionRouteStepKind =
   | "gear_gap"
   | "equipment_comparison"
   | "skill_transition"
+  | "progression_checkpoint"
   | "crafting_plan"
   | "farming_atlas"
   | "passive_tree"
@@ -85,6 +86,11 @@ export interface SkillTransitionComparison {
   readonly removedSupportGems: readonly string[];
 }
 
+export interface ProgressionCheckpointDetail extends Poe1ProgressionCheckpoint {
+  readonly planName: string;
+  readonly isNextCheckpoint: boolean;
+}
+
 export interface RouteEvidence {
   readonly source: RouteEvidenceSource;
   readonly version: string;
@@ -129,6 +135,8 @@ export interface ProgressionRouteStep {
   readonly equipmentComparison?: EquipmentSlotComparison;
   /** Main skill/support names compared between saved ACTIVE and target PoB groups. */
   readonly skillTransition?: SkillTransitionComparison;
+  /** One sourced, build-matched level checkpoint from a local route pack. */
+  readonly progressionCheckpoint?: ProgressionCheckpointDetail;
   /** Exact node IDs and optional names resolved from a matching local tree export. */
   readonly passiveTree?: PassiveTreeComparison;
   /** Exact route facts supplied by a local, version-pinned PoE 1 knowledge pack. */
@@ -266,6 +274,17 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
       }] : [];
     });
   };
+
+  const progressionCheckpointSteps = buildProgressionCheckpointSteps({
+    build,
+    progression,
+    plans: progressionPlansForBuild(build, routeKnowledgePack),
+    dataVersion,
+    routeEvidence,
+    progressionEvidence,
+    buildEvidence,
+    packEvidence,
+  });
 
   const gearGoals = build.itemGoals.filter(isGearGoal).sort(compareGoals);
   const gearSteps: Omit<ProgressionRouteStep, "order">[] = gearGoals.map((goal) => {
@@ -549,6 +568,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
       })];
 
   const ordered: Omit<ProgressionRouteStep, "order">[] = [
+    ...progressionCheckpointSteps,
     ...gearSteps,
     ...equipmentComparisonSteps,
     ...skillTransitionSteps,
@@ -889,6 +909,65 @@ function routeStatus(requiredData: readonly RouteDataRequirement[]): Progression
   if (hasPersonal) return "needs_personal_data";
   if (hasCurated) return "needs_curated_data";
   return "ready";
+}
+
+function buildProgressionCheckpointSteps(input: {
+  readonly build: BuildManifest;
+  readonly progression: RouteProgressionSnapshot;
+  readonly plans: ReturnType<typeof progressionPlansForBuild>;
+  readonly dataVersion: ProgressionRouteDataVersion;
+  readonly routeEvidence: RouteEvidence;
+  readonly progressionEvidence: RouteEvidence;
+  readonly buildEvidence: (detail: string, goal?: ItemGoal) => RouteEvidence;
+  readonly packEvidence: (sourceIds: readonly string[], entryId: string) => RouteEvidence[];
+}): Omit<ProgressionRouteStep, "order">[] {
+  const { build, progression, plans, dataVersion, routeEvidence, progressionEvidence, buildEvidence, packEvidence } = input;
+  const normalize = poe1Provider.normalizeItemIdentity;
+  const currentLevel = progression.characterLevel;
+  return plans.flatMap((plan) => {
+    const nextCheckpointId = currentLevel === undefined
+      ? undefined
+      : plan.checkpoints.find((checkpoint) => checkpoint.level > currentLevel)?.id;
+    return plan.checkpoints.map((checkpoint) => {
+      const isNextCheckpoint = checkpoint.id === nextCheckpointId;
+      const requiredData: RouteDataRequirement[] = currentLevel === undefined ? [{
+        category: "personal",
+        key: "current_character_level",
+        description: "Set a current-character level to identify which build checkpoint comes next.",
+      }] : [];
+      if (checkpoint.passiveSpecName && !(build.passiveSpecs ?? []).some((spec) =>
+        normalize(spec.name ?? "") === normalize(checkpoint.passiveSpecName ?? ""))) {
+        requiredData.push({
+          category: "personal",
+          key: `target_passive_spec:${checkpoint.id}`,
+          description: `Import the target PoB passive spec named “${checkpoint.passiveSpecName}” to connect this level checkpoint to its saved tree.`,
+        });
+      }
+      const action = isNextCheckpoint
+        ? `NEXT CHECKPOINT · level ${checkpoint.level}. ${checkpoint.objective} Follow the ordered steps from ${plan.name}. Current character level: ${currentLevel}.`
+        : progression.characterLevel === undefined
+          ? `This imported ${plan.name} checkpoint is for level ${checkpoint.level}. ${checkpoint.objective} A current-character level is needed to identify the next checkpoint.`
+          : `This imported ${plan.name} checkpoint is for level ${checkpoint.level}. ${checkpoint.objective} Current character level: ${currentLevel}; review earlier steps against your actual progress.`;
+      return {
+        id: `progression-checkpoint:${build.id}:${plan.id}:${checkpoint.id}`,
+        kind: "progression_checkpoint",
+        status: requiredData.length ? routeStatus(requiredData) : "ready",
+        title: `${isNextCheckpoint ? "Next checkpoint" : `Level ${checkpoint.level}`}: ${checkpoint.title}`,
+        action,
+        confidence: "low",
+        dataVersion,
+        evidence: [
+          routeEvidence,
+          buildEvidence(`The imported route ${plan.name} matches the declared exact build selectors: ${Object.entries(plan.match).map(([key, value]) => `${key} “${value}”`).join(", ")}.`),
+          progressionEvidence,
+          ...packEvidence(checkpoint.sourceIds, `${plan.id}/${checkpoint.id}`),
+        ],
+        requiredData,
+        target: plan.name,
+        progressionCheckpoint: { ...checkpoint, planName: plan.name, isNextCheckpoint },
+      };
+    });
+  });
 }
 
 function buildPassiveTreeSteps(input: {

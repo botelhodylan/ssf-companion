@@ -760,6 +760,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .route-step-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .route-step-meta { display: flex; align-items: center; gap: 7px; font-size: 8px; letter-spacing: .075em; }
 .route-step-meta i { width: 3px; height: 3px; border-radius: 50%; background: #727b74; }
+.route-next-checkpoint { padding: 3px 5px; border: 1px solid #4c6248; border-radius: 3px; color: #bdd1a6; background: #263326; font-size: 7px; letter-spacing: .08em; }
 .route-step-copy > strong { color: #e7ddcd; font: 700 14px/1.25 var(--display); }
 .route-step-action { display: -webkit-box; overflow: hidden; color: #a0a59e; font-size: 10px; line-height: 1.48; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .route-status { display: inline-flex; align-items: center; justify-content: center; max-width: 142px; min-height: 23px; padding: 4px 7px; border: 1px solid #484f4b; border-radius: 3px; color: #a9aaa2; background: #222828; font-size: 8px; font-weight: 600; line-height: 1.25; text-align: center; }
@@ -780,6 +781,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .equipment-comparison-grid span { color: #bd9c6f; font-size: 8px; font-weight: 700; letter-spacing: .08em; }
 .equipment-comparison-grid p { margin: 6px 0 0; color: #e0d6c8; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 .equipment-comparison-note { margin: 0; color: #898f8a; font-size: 9px; line-height: 1.5; }
+.progression-checkpoint-detail { padding: 12px; border: 1px solid #3b433d; border-radius: 4px; background: #1b2220; }
+.progression-checkpoint-detail p { margin: 0; color: #a9ada4; font-size: 10px; line-height: 1.5; }
+.progression-checkpoint-detail p b { color: #d0c4b1; }
+.progression-checkpoint-detail ol { display: flex; flex-direction: column; gap: 5px; margin: 0; padding-left: 18px; color: #a9ada4; font-size: 10px; line-height: 1.48; }
+.progression-checkpoint-detail .route-step-data-note { color: #898f8a; font-size: 9px; }
 .skill-transition-grid, .skill-transition-diff { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .skill-transition-grid > div, .skill-transition-diff > div { min-width: 0; padding: 10px; border: 1px solid #38403f; border-radius: 4px; background: #1a2021; }
 .skill-transition-grid span { color: #bd9c6f; font-size: 8px; font-weight: 700; letter-spacing: .08em; }

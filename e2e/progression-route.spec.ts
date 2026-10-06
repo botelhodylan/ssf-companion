@@ -49,6 +49,7 @@ const routePack = {
       sourceIds: ["playbook-source"],
     },
   ],
+  progressionPlans: [],
 };
 
 test("imports a versioned route pack and explains its linked mechanic playbook", async ({ page }, testInfo) => {
@@ -71,7 +72,7 @@ test("imports a versioned route pack and explains its linked mechanic playbook",
   });
 
   await expect(page.getByRole("region", { name: "PoE 1 route knowledge pack" }).getByRole("status"))
-    .toContainText("Playwright UI fixture · PoE 3.29.3b · 1 acquisition route · 0 craft plans · 1 mechanic playbook · 2 sources");
+    .toContainText("Playwright UI fixture · PoE 3.29.3b · 0 progression paths · 1 acquisition route · 0 craft plans · 1 mechanic playbook · 2 sources");
   const routeStep = page.getByRole("button", { name: /Target league mechanic: Synthetic Betrayal route/ });
   await expect(routeStep).toBeVisible();
   await routeStep.click();

@@ -65,6 +65,7 @@ describe("PoE 1 route knowledge packs", () => {
     expect(pack.acquisitionRoutes).toEqual([]);
     expect(pack.craftPlans).toEqual([]);
     expect(pack.mechanicPlans).toEqual([]);
+    expect(pack.progressionPlans).toEqual([]);
   });
 
   it("loads a bounded, patch-versioned pack with source-backed farming and craft plans", () => {
@@ -77,6 +78,81 @@ describe("PoE 1 route knowledge packs", () => {
       acquisitionRoutes: [{ method: "divination_card", atlasTreeName: "Card-focused Atlas", atlasShareUrl: "https://www.pathofexile.com/atlas-skill-tree/AAAABgAAAfdPAAA=" }],
       craftPlans: [{ baseType: "Torturer's Mask", requiredItemLevel: 75 }],
     });
+  });
+
+  it("loads exact-build level checkpoints with ordered steps and cited Atlas setup", () => {
+    const pack = parsePoe1RouteKnowledgePack(serialize({
+      ...VALID_PACK,
+      progressionPlans: [{
+        id: "winter-orb-route",
+        name: "Winter Orb progression route",
+        match: { className: "Witch", ascendancy: "Elementalist", mainSkillName: "Winter Orb" },
+        checkpoints: [
+          {
+            id: "campaign-transition",
+            level: 33,
+            title: "Campaign transition",
+            objective: "Fixture checkpoint objective.",
+            steps: ["Fixture action one.", "Fixture action two."],
+            passiveSpecName: "Campaign",
+            sourceIds: ["wiki"],
+          },
+          {
+            id: "atlas-specialization",
+            level: 86,
+            title: "Atlas specialization",
+            objective: "Fixture Atlas checkpoint objective.",
+            steps: ["Review the imported tree before using it."],
+            atlasTreeName: "Fixture Atlas tree",
+            atlasNodeNames: ["Fixture node"],
+            atlasShareUrl: "https://www.pathofexile.com/atlas-skill-tree/AAAABgAAAfdPAAA=",
+            sourceIds: ["wiki"],
+          },
+        ],
+      }],
+    }));
+
+    expect(pack.progressionPlans).toMatchObject([{
+      id: "winter-orb-route",
+      match: { className: "Witch", ascendancy: "Elementalist", mainSkillName: "Winter Orb" },
+      checkpoints: [
+        { id: "campaign-transition", level: 33, passiveSpecName: "Campaign", steps: ["Fixture action one.", "Fixture action two."] },
+        { id: "atlas-specialization", level: 86, atlasTreeName: "Fixture Atlas tree", atlasShareUrl: "https://www.pathofexile.com/atlas-skill-tree/AAAABgAAAfdPAAA=" },
+      ],
+    }]);
+  });
+
+  it("rejects ambiguous build selectors, unsorted levels, missing evidence, and unsupported Atlas links", () => {
+    const checkpoint = {
+      id: "level-40",
+      level: 40,
+      title: "Fixture checkpoint",
+      objective: "Synthetic only.",
+      steps: ["Synthetic only."],
+      sourceIds: ["wiki"],
+    };
+    const progressionPlan = {
+      id: "fixture-progression",
+      name: "Fixture route",
+      match: { className: "Witch" },
+      checkpoints: [checkpoint],
+    };
+    expect(() => parsePoe1RouteKnowledgePack(serialize({
+      ...VALID_PACK,
+      progressionPlans: [{ ...progressionPlan, match: {} }],
+    }))).toThrow(/needs a className, ascendancy, or mainSkillName/);
+    expect(() => parsePoe1RouteKnowledgePack(serialize({
+      ...VALID_PACK,
+      progressionPlans: [{ ...progressionPlan, checkpoints: [checkpoint, { ...checkpoint, id: "level-35", level: 35 }] }],
+    }))).toThrow(/strictly increasing level/);
+    expect(() => parsePoe1RouteKnowledgePack(serialize({
+      ...VALID_PACK,
+      progressionPlans: [{ ...progressionPlan, checkpoints: [{ ...checkpoint, sourceIds: ["missing"] }] }],
+    }))).toThrow(/not declared in sources/);
+    expect(() => parsePoe1RouteKnowledgePack(serialize({
+      ...VALID_PACK,
+      progressionPlans: [{ ...progressionPlan, checkpoints: [{ ...checkpoint, atlasTreeName: "Unsupported" }] }],
+    }))).toThrow(/validated GGG Atlas share URL/);
   });
 
   it("rejects non-HTTPS and credential-bearing source URLs", () => {

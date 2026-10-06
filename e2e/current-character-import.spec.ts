@@ -20,6 +20,50 @@ Prismatic Ring</Item>
   <Tree activeSpec="1"><Spec id="1" title="Atlas" treeVersion="3_26" nodes="100,101,102"/></Tree>
 </PathOfBuilding>`;
 
+const syntheticProgressionPack = {
+  schemaVersion: 1,
+  game: "poe1",
+  id: "synthetic-winter-orb-route",
+  name: "Synthetic Winter Orb route",
+  contentVersion: "3.29.3b",
+  sources: [{
+    id: "synthetic-guide",
+    title: "Synthetic route source",
+    url: "https://example.org/synthetic-winter-orb",
+    checkedOn: "2026-10-05",
+  }],
+  acquisitionRoutes: [],
+  craftPlans: [],
+  mechanicPlans: [],
+  progressionPlans: [{
+    id: "winter-orb-elementalist",
+    name: "Synthetic Winter Orb progression",
+    match: { className: "Witch", ascendancy: "Elementalist", mainSkillName: "Winter Orb" },
+    checkpoints: [
+      {
+        id: "campaign-milestone",
+        level: 65,
+        title: "Campaign milestone",
+        objective: "Synthetic earlier checkpoint objective.",
+        steps: ["Review this fixture milestone."],
+        sourceIds: ["synthetic-guide"],
+      },
+      {
+        id: "atlas-milestone",
+        level: 90,
+        title: "Atlas milestone",
+        objective: "Synthetic next checkpoint objective.",
+        steps: ["Review the imported Atlas PoB spec.", "Inspect the synthetic Atlas tree share."],
+        passiveSpecName: "Atlas",
+        atlasTreeName: "Synthetic Atlas setup",
+        atlasNodeNames: ["Synthetic Atlas node"],
+        atlasShareUrl: "https://www.pathofexile.com/atlas-skill-tree/AAAABgAAAfdPAAA=",
+        sourceIds: ["synthetic-guide"],
+      },
+    ],
+  }],
+};
+
 test("imports a PoB into a league character and opens its progression route", async ({ page }, testInfo) => {
   const browserErrors: string[] = [];
   const externalRequests: string[] = [];
@@ -90,6 +134,24 @@ test("imports a PoB into a league character and opens its progression route", as
   });
   await expect(page.getByRole("region", { name: "Local passive tree data" }).getByRole("status"))
     .toContainText("tree 3_26");
+  await page.getByTestId("route-pack-input").setInputFiles({
+    name: "synthetic-winter-orb-route.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(syntheticProgressionPack)),
+  });
+  await expect(page.getByRole("region", { name: "PoE 1 route knowledge pack" }).getByRole("status"))
+    .toContainText("Synthetic Winter Orb route · PoE 3.29.3b · 1 progression path · 0 acquisition routes · 0 craft plans · 0 mechanic playbooks · 1 source");
+  const nextCheckpoint = page.getByRole("button", { name: /Next checkpoint: Atlas milestone/ });
+  await expect(nextCheckpoint).toBeVisible();
+  await nextCheckpoint.click();
+  await expect(inspector).toContainText("Level 90 · Synthetic Winter Orb progression");
+  await expect(inspector).toContainText("Synthetic next checkpoint objective.");
+  await expect(inspector).toContainText("Passive tree spec: Atlas");
+  await expect(inspector).toContainText("Atlas setup: Synthetic Atlas setup");
+  await expect(inspector).toContainText("Synthetic Atlas node");
+  await expect(inspector).toContainText("Review the imported Atlas PoB spec.");
+  await expect(inspector.getByRole("button", { name: "Open source" })).toHaveCount(1);
+  await expect(inspector.getByRole("button", { name: "Open Atlas tree share" })).toHaveCount(1);
   const targetPassiveStep = page.getByRole("button", { name: /PoB tree spec: Atlas/ });
   await targetPassiveStep.click();
   await expect(inspector).toContainText("up to ten nodes from this traversal");

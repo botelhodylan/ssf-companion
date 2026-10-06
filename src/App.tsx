@@ -94,6 +94,7 @@ const ROUTE_STEP_LABELS: Record<ProgressionRouteStep["kind"], string> = {
   gear_gap: "Gear goal",
   equipment_comparison: "Gear transition",
   skill_transition: "Skill transition",
+  progression_checkpoint: "Build progression",
   crafting_plan: "Crafting",
   farming_atlas: "Farm & Atlas",
   passive_tree: "Character tree",
@@ -1364,25 +1365,25 @@ export default function App() {
               <div className="route-tree-data-copy">
                 <span className="section-kicker">PATCH-VERSIONED CONTENT</span>
                 <strong>Import a PoE 1 route knowledge pack</strong>
-                <p>Exact item and base matches can provide cited farm routes, Atlas node names, step-by-step crafts, and mechanic playbooks. Packs stay local; review their patch and source links before acting.</p>
+                <p>Build-matched level checkpoints and exact item/base matches can provide cited steps, farm routes, Atlas trees, crafts, and mechanic playbooks. Packs stay local; review their patch and source links before acting.</p>
               </div>
               <div className="route-tree-data-controls">
                 <button className="button button-outline" type="button" onClick={() => routeKnowledgePackFileInputRef.current?.click()}>Import route data</button>
                 {routeKnowledgePack && (
                   <div className="route-tree-data-status" role="status">
-                    <span>{routeKnowledgePack.name} · PoE {routeKnowledgePack.contentVersion} · {routeKnowledgePack.acquisitionRoutes.length} acquisition route{routeKnowledgePack.acquisitionRoutes.length === 1 ? "" : "s"} · {routeKnowledgePack.craftPlans.length} craft plan{routeKnowledgePack.craftPlans.length === 1 ? "" : "s"} · {routeKnowledgePack.mechanicPlans.length} mechanic playbook{routeKnowledgePack.mechanicPlans.length === 1 ? "" : "s"} · {routeKnowledgePack.sources.length} source{routeKnowledgePack.sources.length === 1 ? "" : "s"}</span>
+                    <span>{routeKnowledgePack.name} · PoE {routeKnowledgePack.contentVersion} · {routeKnowledgePack.progressionPlans.length} progression path{routeKnowledgePack.progressionPlans.length === 1 ? "" : "s"} · {routeKnowledgePack.acquisitionRoutes.length} acquisition route{routeKnowledgePack.acquisitionRoutes.length === 1 ? "" : "s"} · {routeKnowledgePack.craftPlans.length} craft plan{routeKnowledgePack.craftPlans.length === 1 ? "" : "s"} · {routeKnowledgePack.mechanicPlans.length} mechanic playbook{routeKnowledgePack.mechanicPlans.length === 1 ? "" : "s"} · {routeKnowledgePack.sources.length} source{routeKnowledgePack.sources.length === 1 ? "" : "s"}</span>
                     <button className="text-link" type="button" onClick={() => setRouteKnowledgePack(null)}>Clear</button>
                   </div>
                 )}
               </div>
               <input data-testid="route-pack-input" ref={routeKnowledgePackFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserRouteKnowledgePackChosen(event)} />
-              <p className="route-tree-data-note">No farming, crafting, or mechanic playbooks are bundled until their patch and reuse terms can be verified. Routes are generated only from exact item/base matches and retain their source links.</p>
+              <p className="route-tree-data-note">No progression guides, farming, crafting, or mechanic playbooks are bundled yet. Level checkpoints come from the imported pack; the app does not derive character levels from tree traversal. Item routes use exact item/base matches and retain source links.</p>
             </section>
 
             <div className="route-layout">
               <section className="route-step-list" aria-label="Ordered progression steps">
-                <div className="route-section-heading">
-                  <div><h2>Route steps</h2><span>Sorted from gear checks to long-term build systems</span></div>
+              <div className="route-section-heading">
+                  <div><h2>Route steps</h2><span>Build checkpoints first, then gear and long-term systems</span></div>
                   <button className="button button-outline route-export-button" type="button" onClick={exportProgressionRoute}><ArrowDownToLine size={14} /> Export route</button>
                 </div>
                 {route.steps.map((step) => (
@@ -1395,7 +1396,7 @@ export default function App() {
                   >
                     <span className="route-step-number">{String(step.order).padStart(2, "0")}</span>
                     <span className="route-step-copy">
-                      <span className="route-step-meta">{ROUTE_STEP_LABELS[step.kind]} <i /> {step.confidence} confidence</span>
+                      <span className="route-step-meta">{ROUTE_STEP_LABELS[step.kind]} <i /> {step.confidence} confidence{step.progressionCheckpoint?.isNextCheckpoint ? <b className="route-next-checkpoint">UP NEXT</b> : null}</span>
                       <strong>{step.title}</strong>
                       <span className="route-step-action">{step.action}</span>
                     </span>
@@ -1534,6 +1535,19 @@ export default function App() {
                           </div>
                         </div>
                         <p className="equipment-comparison-note">This compares gem names in saved PoB groups. It cannot confirm live socket links, colors, gem levels, or gem availability.</p>
+                      </div>
+                    )}
+                    {selectedRouteStep.progressionCheckpoint && (
+                      <div className="route-inspector-section progression-checkpoint-detail">
+                        <strong>Level {selectedRouteStep.progressionCheckpoint.level} · {selectedRouteStep.progressionCheckpoint.planName}</strong>
+                        <p>{selectedRouteStep.progressionCheckpoint.objective}</p>
+                        {selectedRouteStep.progressionCheckpoint.passiveSpecName && <p><b>Passive tree spec:</b> {selectedRouteStep.progressionCheckpoint.passiveSpecName}</p>}
+                        {selectedRouteStep.progressionCheckpoint.atlasTreeName && <p><b>Atlas setup:</b> {selectedRouteStep.progressionCheckpoint.atlasTreeName}</p>}
+                        {selectedRouteStep.progressionCheckpoint.atlasNodeNames?.length ? <p><b>Atlas nodes:</b> {selectedRouteStep.progressionCheckpoint.atlasNodeNames.join(", ")}</p> : null}
+                        {selectedRouteStep.progressionCheckpoint.atlasShareUrl && <button className="text-link route-evidence-link" type="button" onClick={() => void openTrustedLink(selectedRouteStep.progressionCheckpoint!.atlasShareUrl!)}>Open Atlas tree share <ExternalLink size={12} /></button>}
+                        <strong>Checkpoint steps</strong>
+                        <ol>{selectedRouteStep.progressionCheckpoint.steps.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ol>
+                        <p className="route-step-data-note">The level and actions come from the imported route pack; compare the objectives with your character before relying on them.</p>
                       </div>
                     )}
                     {selectedRouteStep.knowledgePlan && (
