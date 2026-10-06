@@ -4,6 +4,14 @@ This project follows a simple release history. Changes are grouped by version; G
 
 ## Unreleased
 
+## 0.2.3 Preview
+
+- Add player-authored, league-scoped JSON stash snapshots to the local Account page while GGG OAuth is unavailable; include a downloadable schema template and per-league replace/clear actions.
+- Use exact supplied stash counts for gear and craft route checks and loot relevance. Partial coverage treats absent counts as unknown; complete coverage is an explicit player assertion.
+- Validate the stash schema, enforce size/item/count limits, preserve source filename and import time, and keep raw files on-device only.
+- Extend Playwright and route-rule coverage through local stash import, stash-backed gear completion, and partial-snapshot uncertainty.
+- Override `source-map-js` to patched 1.2.2 and locally backport the proposed `sprintf-js` bounded-precision fix, with a regression check for the vulnerable cases.
+
 ## 0.2.2 Preview
 
 - Assign guide-provided levels to imported PoB passive specs from the progression route inspector; the app creates explicit local tree checkpoints and identifies the next one from the selected character level.

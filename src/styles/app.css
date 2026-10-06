@@ -527,6 +527,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .settings-input-label { display: block; margin-bottom: 7px; color: #d2c9bb; font-size: 12px; font-weight: 600; }
 .settings-section input { width: min(100%, 525px); height: 41px; padding: 0 12px; border: 1px solid #434a49; border-radius: 4px; color: #eee4d4; background: #171c1d; font-size: 13px; }
 .settings-section input::placeholder { color: #737b78; }
+.stash-snapshot-import { display: flex; flex-direction: column; gap: 12px; }
+.stash-snapshot-import > div:first-child p { margin-bottom: 0; }
+.stash-snapshot-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.stash-snapshot-actions .button { min-height: 37px; font-size: 11px; }
+.stash-snapshot-actions .text-link { padding: 8px 4px; font-size: 11px; }
+.stash-snapshot-status { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid #3a493d; border-radius: 4px; color: #a9bd9c; background: #19201a; font-size: 11px; }
+.stash-snapshot-status strong { color: #d2e0c2; font-size: 12px; }
+.stash-snapshot-status span { color: #98a295; font-size: 10px; overflow-wrap: anywhere; }
+.stash-snapshot-items { margin-top: 4px; }
+.stash-snapshot-items summary { width: fit-content; color: #c7d1bf; font-size: 10px; cursor: pointer; }
+.stash-snapshot-items ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; max-height: 190px; overflow: auto; margin: 8px 0 4px; padding: 0; list-style: none; }
+.stash-snapshot-items li { display: flex; justify-content: space-between; gap: 12px; color: #9ea99b; font-size: 10px; }
+.stash-snapshot-items li span { overflow-wrap: anywhere; }
+.stash-snapshot-items li strong { flex: 0 0 auto; color: #d5ddcc; font: inherit; }
+.stash-snapshot-items small { color: #8f9b8c; font-size: 9px; }
+.stash-snapshot-status.is-empty { border-color: #414542; color: #949b94; background: #171c1d; }
+.stash-snapshot-status.is-empty strong { color: #c6c1b5; }
+.stash-import-message { padding: 9px 11px; border-left: 2px solid #789a69; color: #c0d1b3; background: #1b241b; font-size: 11px; }
+.stash-import-error { border-left-color: #c17463; color: #e2b4a8; background: #281c1b; }
+.stash-snapshot-import > .modal-small-note { max-width: 760px; margin: 0; }
 .settings-inline-note { display: flex; align-items: center; gap: 7px; margin-top: 9px; color: #88918a; font-size: 11px; }
 .settings-inline-note svg { color: #95a37f; }
 .local-data-section { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; max-width: 1000px; padding: 18px 0; border-bottom: 1px solid #343b3b; }

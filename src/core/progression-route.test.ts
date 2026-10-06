@@ -156,6 +156,28 @@ describe("buildProgressionRoute", () => {
     expect(ring?.action).toContain("availability is unknown");
   });
 
+  it("does not treat unlisted items in a partial stash snapshot as confirmed gaps", () => {
+    const route = buildProgressionRoute({
+      build: BUILD,
+      progression: PROGRESSION,
+      stash: {
+        version: "local-stash-partial",
+        source: "manual",
+        coverage: "partial",
+        items: [{ name: "Orb of Alteration", quantity: 8 }],
+      },
+    });
+    const ring = route.steps.find((step) => step.goalId === "goal-ring" && step.kind === "gear_gap");
+
+    expect(ring).toMatchObject({ status: "needs_personal_data", confidence: "medium" });
+    expect(ring?.ownedQuantity).toBeUndefined();
+    expect(ring?.action).toContain("partial stash snapshot does not list The Taming");
+    expect(ring?.action).not.toContain("Acquire 1 more");
+    expect(ring?.requiredData).toContainEqual(expect.objectContaining({
+      key: "complete_league_stash_snapshot",
+    }));
+  });
+
   it("marks the current stage unknown until a local or official snapshot is supplied", () => {
     const route = buildProgressionRoute({
       build: BUILD,
@@ -167,6 +189,52 @@ describe("buildProgressionRoute", () => {
     expect(farming).toMatchObject({ status: "needs_personal_and_curated_data" });
     expect(farming?.action).toContain("Current stage: Unknown stage");
     expect(farming?.requiredData).toContainEqual(expect.objectContaining({ key: "current_progression_stage" }));
+  });
+
+  it("keeps missing craft-material counts unknown in a partial stash snapshot", () => {
+    const pack = parsePoe1RouteKnowledgePack(JSON.stringify({
+      schemaVersion: 1,
+      game: "poe1",
+      id: "partial-stash-craft",
+      name: "Partial stash craft fixture",
+      contentVersion: "3.29.3b",
+      sources: [{ id: "guide", title: "Fixture source", url: "https://example.org/guide" }],
+      acquisitionRoutes: [],
+      craftPlans: [{
+        id: "mask-craft-plan",
+        match: { baseTypes: ["Torturer's Mask"] },
+        stage: "early_mapping",
+        title: "Helmet craft fixture",
+        baseType: "Torturer's Mask",
+        prerequisites: [],
+        materials: [{ name: "Orb of Alteration", quantity: 4 }],
+        steps: ["Inspect the imported input."],
+        stopCondition: "Stop at the fixture target.",
+        sourceIds: ["guide"],
+      }],
+      mechanicPlans: [],
+    }));
+    const route = buildProgressionRoute({
+      build: BUILD,
+      progression: PROGRESSION,
+      routeKnowledgePack: pack,
+      stash: {
+        version: "partial-craft-stash",
+        source: "manual",
+        coverage: "partial",
+        items: [{ name: "Torturer's Mask", quantity: 1 }],
+      },
+    });
+    const craft = route.steps.find((step) => step.goalId === "goal-helmet-base" && step.kind === "crafting_plan");
+
+    expect(craft).toMatchObject({ status: "needs_personal_data" });
+    expect(craft?.knowledgePlan?.materials?.[0]).toEqual({
+      name: "Orb of Alteration",
+      quantity: 4,
+    });
+    expect(craft?.requiredData).toContainEqual(expect.objectContaining({
+      key: "complete_league_stash_snapshot",
+    }));
   });
 
   it("does not turn an abstract tag goal into a fabricated exact gear gap", () => {

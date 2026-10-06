@@ -103,6 +103,30 @@ test("imports a PoB into a league character and opens its progression route", as
   const routeContext = page.getByRole("region", { name: "Route planning context" });
   await expect(routeContext).toContainText("Synthetic Winter Orb Witch");
   await expect(routeContext).toContainText("Atlas progression");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Account" }).click();
+  const stashRegion = page.getByRole("region", { name: "League stash snapshot" });
+  await page.getByTestId("stash-snapshot-input").setInputFiles({
+    name: "synthetic-league-stash.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({
+      format: "ssf-companion-stash-snapshot",
+      schemaVersion: 1,
+      game: "poe1",
+      leagueName: "Synthetic SSF League",
+      coverage: "partial",
+      items: [
+        { name: "The Taming", baseType: "Prismatic Ring", quantity: 1 },
+        { name: "Orb of Alteration", baseType: "Orb of Alteration", quantity: 15, tags: ["currency"] },
+      ],
+    })),
+  });
+  await expect(stashRegion).toContainText("Imported 2 item types into Synthetic SSF League as a player-provided partial snapshot.");
+  await stashRegion.getByText("Review first 2 item counts").click();
+  await expect(stashRegion).toContainText("The Taming");
+  await page.screenshot({ path: testInfo.outputPath("league-stash-import.png") });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Progression route" }).click();
+  await expect(routeContext).toContainText("player-provided partial stash snapshot is loaded for Synthetic SSF League");
+  await expect(page.getByRole("button", { name: /Gear target covered: The Taming/ })).toBeVisible();
   const passiveStep = page.getByRole("button", { name: /PoB tree spec: Atlas/ });
   await expect(passiveStep).toBeVisible();
   await passiveStep.click();

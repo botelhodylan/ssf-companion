@@ -1,4 +1,5 @@
 import { poe1Provider } from "./game-provider";
+import { countStashMatches, type StashCoverage } from "./stash-snapshot";
 import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeDataset } from "./passive-tree-data";
 import { acquisitionRoutesForGoal, craftPlanForGoal, mechanicPlanById, progressionPlansForBuild, type Poe1ProgressionCheckpoint, type Poe1RouteKnowledgePack, type Poe1RouteKnowledgePlan } from "./poe1-route-pack";
 import type { BuildManifest, BuildRole, BuildSkillGroup, EquipmentItemDetailFacts, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
@@ -172,6 +173,8 @@ export interface RouteStashItem {
 export interface RouteStashSnapshot {
   readonly version: string;
   readonly source: "official_import" | "manual" | "demo";
+  /** Partial snapshots prove only listed counts; absence remains unknown. */
+  readonly coverage?: StashCoverage;
   /** Aggregate duplicates across tabs before passing the snapshot. */
   readonly items: readonly RouteStashItem[];
 }
@@ -255,7 +258,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     ? {
         source: "stash_snapshot",
         version: stash.version,
-        detail: `League stash snapshot from ${stash.source}; item counts are exact matches against its supplied names, bases, and tags.`,
+        detail: "League stash snapshot from " + stash.source + " (" + (stash.coverage ?? "complete") + " coverage); item counts are exact matches against its supplied names, bases, and tags.",
       }
     : undefined;
 
@@ -301,7 +304,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
   const gearSteps: Omit<ProgressionRouteStep, "order">[] = gearGoals.map((goal) => {
     const target = goalLabel(goal);
     const hasExactTarget = hasExactItemTarget(goal);
-    const ownedQuantity = stash && hasExactTarget ? countGoalMatches(goal, stash.items) : undefined;
+    const ownedQuantity = stash && hasExactTarget ? countGoalMatches(goal, stash) : undefined;
     const targetQuantity = normalizedTargetQuantity(goal);
     const complete = ownedQuantity !== undefined && ownedQuantity >= targetQuantity;
     const requiredData: RouteDataRequirement[] = [];
@@ -317,6 +320,13 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
         category: "curated",
         key: "poe1_item_tag_taxonomy",
         description: "An abstract tag goal needs curated item-to-tag mappings before it can be treated as a specific gear gap.",
+      });
+    }
+    if (stash?.coverage === "partial" && !complete) {
+      requiredData.push({
+        category: "personal",
+        key: "complete_league_stash_snapshot",
+        description: "This partial stash snapshot may omit copies. Import a complete snapshot or check the remaining tabs before treating the rest as a confirmed gap.",
       });
     }
     if (reliableBuildConfidence === "low") {
@@ -341,6 +351,10 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
       ? `The league stash snapshot already records ${ownedQuantity} ${target}; this target does not need another acquisition step.`
       : !hasExactTarget
         ? `Resolve ${target} to specific PoE 1 item identities, then compare those items with the league stash; this tag alone does not prove an exact gear gap.`
+        : stash?.coverage === "partial"
+          ? ownedQuantity === undefined
+            ? "The partial stash snapshot does not list " + target + ". Check the remaining tabs or import a complete snapshot before treating it as missing."
+            : "The partial stash snapshot lists " + ownedQuantity + " " + target + ". Check the remaining tabs or import a complete snapshot before treating the remaining amount as missing."
       : stash
         ? `Acquire ${Math.max(0, targetQuantity - (ownedQuantity ?? 0))} more ${target} for this build goal.`
         : `Check the selected league stash for ${target}; its availability is unknown until a stash snapshot is supplied.`;
@@ -385,7 +399,7 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
   const craftingGoals = build.itemGoals.filter((goal) => goal.kind === "crafting").sort(compareGoals);
   const craftingSteps: Omit<ProgressionRouteStep, "order">[] = craftingGoals.map((goal) => {
     const target = goalLabel(goal);
-    const ownedQuantity = stash ? countGoalMatches(goal, stash.items) : undefined;
+    const ownedQuantity = stash ? countGoalMatches(goal, stash) : undefined;
     const targetQuantity = normalizeExplicitQuantity(goal.targetQuantity);
     const craftPlan = craftPlanForGoal(goal, routeKnowledgePack);
     const requiredData: RouteDataRequirement[] = craftPlan ? [] : [{
@@ -400,6 +414,13 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
         ? "A league stash snapshot is needed to compare the craft materials with items already owned."
         : "A league stash snapshot is needed to report whether the target base or crafting input is already available.",
     });
+    if (stash?.coverage === "partial" && (ownedQuantity === undefined || (targetQuantity !== undefined && ownedQuantity < targetQuantity))) {
+      requiredData.push({
+        category: "personal",
+        key: "complete_league_stash_snapshot",
+        description: "This partial stash snapshot may omit the target or crafting inputs. Import a complete snapshot or check the remaining tabs before deciding what is missing.",
+      });
+    }
     if (reliableBuildConfidence === "low") {
       requiredData.push({
         category: "personal",
@@ -409,9 +430,17 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     }
     const materials = craftPlan?.materials.map((material) => {
       const ownedMaterial = stash
-        ? stash.items.filter((item) => poe1Provider.normalizeItemIdentity(item.name) === poe1Provider.normalizeItemIdentity(material.name))
-          .reduce((total, item) => total + item.quantity, 0)
+        ? countStashMatches(stash, { names: [material.name] })
         : undefined;
+      if (stash?.coverage === "partial" && (ownedMaterial === undefined || ownedMaterial < material.quantity)) {
+        if (!requiredData.some((requirement) => requirement.key === "complete_league_stash_snapshot")) {
+          requiredData.push({
+            category: "personal",
+            key: "complete_league_stash_snapshot",
+            description: "This partial stash snapshot may omit crafting inputs. Import a complete snapshot or check the remaining tabs before deciding what is missing.",
+          });
+        }
+      }
       return { ...material, ...(ownedMaterial === undefined ? {} : { ownedQuantity: ownedMaterial }) };
     });
     const knowledgePlan: Poe1RouteKnowledgePlan | undefined = craftPlan ? {
@@ -426,11 +455,28 @@ export function buildProgressionRoute(input: ProgressionRouteInput): Progression
     } : undefined;
     const status = requiredData.length ? routeStatus(requiredData) : "ready";
     const stashText = stash
-      ? ` The supplied snapshot records ${ownedQuantity ?? 0} matching item(s).`
+      ? stash.coverage === "partial"
+        ? ownedQuantity === undefined
+          ? " The partial snapshot does not list this target; other tabs may contain it."
+          : " The partial snapshot lists at least " + ownedQuantity + " matching item(s)."
+        : " The complete supplied snapshot records " + (ownedQuantity ?? 0) + " matching item(s)."
       : " Stash availability is not known.";
+    const coveredMaterialTypes = materials?.filter((material) =>
+      material.ownedQuantity !== undefined && material.ownedQuantity >= material.quantity,
+    ).length ?? 0;
     const craftAction = craftPlan
-      ? `Use ${craftPlan.baseType}${craftPlan.requiredItemLevel ? ` at item level ${craftPlan.requiredItemLevel} or higher` : ""}. Follow the imported ${routeKnowledgePack?.contentVersion} sequence and stop condition; inspect the cited sources before crafting.${stash ? ` The snapshot has ${materials?.filter((material) => (material.ownedQuantity ?? 0) >= material.quantity).length ?? 0}/${materials?.length ?? 0} material types at the required counts.` : " Material availability is unknown until stash data is added."}`
-      : `Keep this declared base or input associated with the build. Do not assume an affix recipe, roll count, or expected result until a source-backed PoE 1 craft plan is imported.${stashText}`;
+      ? "Use " + craftPlan.baseType +
+        (craftPlan.requiredItemLevel ? " at item level " + craftPlan.requiredItemLevel + " or higher" : "") +
+        ". Follow the imported " + (routeKnowledgePack?.contentVersion ?? "route-pack") +
+        " sequence and stop condition; inspect the cited sources before crafting." +
+        (stash
+          ? stash.coverage === "partial"
+            ? " The partial snapshot lists " + coveredMaterialTypes + "/" + (materials?.length ?? 0) +
+              " material types at the required counts; other tabs may contain unlisted inputs."
+            : " The complete snapshot has " + coveredMaterialTypes + "/" + (materials?.length ?? 0) +
+              " material types at the required counts."
+          : " Material availability is unknown until stash data is added.")
+      : "Keep this declared base or input associated with the build. Do not assume an affix recipe, roll count, or expected result until a source-backed PoE 1 craft plan is imported." + stashText;
     return {
       id: `crafting:${goal.id}`,
       kind: "crafting_plan",
@@ -1362,29 +1408,12 @@ function normalizeExplicitQuantity(quantity: number | undefined): number | undef
   return Math.max(1, Math.floor(quantity));
 }
 
-function countGoalMatches(goal: ItemGoal, items: readonly RouteStashItem[]): number {
-  return items.reduce((total, item) => {
-    if (!goalMatchesItem(goal, item)) return total;
-    const quantity = Number.isFinite(item.quantity) ? Math.max(0, Math.floor(item.quantity)) : 0;
-    return total + quantity;
-  }, 0);
-}
-
-function goalMatchesItem(goal: ItemGoal, item: RouteStashItem): boolean {
-  const normalize = poe1Provider.normalizeItemIdentity;
-  const itemName = normalize(item.name);
-  const baseType = normalize(item.baseType ?? "");
-  const named = (goal.match.itemNames ?? []).some((value) => {
-    const target = normalize(value);
-    return target === itemName || target === baseType;
+function countGoalMatches(goal: ItemGoal, stash: RouteStashSnapshot): number | undefined {
+  return countStashMatches(stash, {
+    names: goal.match.itemNames,
+    baseTypes: goal.match.baseTypes,
+    tags: goal.match.anyTags,
   });
-  const based = (goal.match.baseTypes ?? []).some((value) => {
-    const target = normalize(value);
-    return target === baseType || target === itemName;
-  });
-  const itemTags = new Set((item.tags ?? []).map(normalize));
-  const tagged = (goal.match.anyTags ?? []).some((tag) => itemTags.has(normalize(tag)));
-  return named || based || tagged;
 }
 
 function buildConfidence(build: BuildManifest): RouteConfidence {

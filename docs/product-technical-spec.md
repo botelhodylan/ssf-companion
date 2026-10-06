@@ -51,6 +51,7 @@ After GGG registration is available, account sync uses only documented OAuth res
 - Parse a useful Build Manifest: build name, class/ascendancy where present, active and alternate named PoB skill/equipment sets, main skills/supports, gear/base/unique requirements, bounded item-level/quality/socket/property/modifier-text facts, item and crafting references, passive allocation metadata where available, source, parse warnings, and confidence.
 - Store local accounts, PoE 1 leagues, characters, builds, and goals with stable IDs. Keep role and league boundaries explicit.
 - Create an editable local character snapshot from an explicitly ACTIVE PoB import after selecting its league. The linked build manifest retains imported gear sets, skill sets, and passive specs; this is player-supplied data, not live GGG character sync.
+- Import a bounded, player-authored stash snapshot under the selected league. Exact supplied counts can update route gear/craft checks and loot relevance; partial coverage leaves unlisted items unknown. The snapshot schema is local SSF Companion JSON, not GGG API data.
 - Deterministic relevance breakdown for current build, immediate upgrade opportunity, crafting use, scarcity, future build demand, progression stage, and clutter cost.
 - Manual progression stage and manual league/character contexts where OAuth is unavailable.
 - Explainability panel and exportable JSON/CSV priority plan.

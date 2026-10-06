@@ -22,6 +22,7 @@ The [0.2.2 unsigned Windows preview](https://github.com/botelhodylan/ssf-compani
 - Optionally audit a player-selected `.filter` export locally to find candidate `BaseType` mentions for current priorities, with rule order, FilterBlade IDs, other rule lines, existing style/sound directives, and `Continue` markers. Load current PoE 1 Customizer labels from NeverSink's public assets on request, or select a local `.options` file. The audit is read-only and does not follow `Import` files.
 - Preview and save a new, style-matched `.filter` copy by promoting only Keep/Consider targets with complete exact-base `Show` rules. The adapter copies that rule's conditions and presentation, prepends it, and keeps the selected source text unchanged below it. Ambiguous, broad, incomplete, and `Continue` rules are skipped; the result still needs FilterBlade simulator and in-game review.
 - Run without an account connection. GGG OAuth account sync is shown as unavailable until GGG accepts new OAuth application registrations.
+- Import a player-authored JSON stash snapshot into the selected league. Exact listed counts inform route gaps, crafting material availability, and item relevance; partial snapshots never treat unlisted items as zero. See the [stash snapshot format](docs/stash-snapshot-import.md) and [template](data/poe1-stash-snapshot-template.json).
 
 ## Run from source
 
@@ -42,7 +43,7 @@ pnpm test:e2e
 pnpm package:win
 ```
 
-Playwright launches Electron with an isolated profile to check the desktop preload bridge and app version, exercises league-first PoB-to-character import plus a build-matched level checkpoint with Atlas/source details, and runs the renderer in Chromium to check route-pack import through the cited mechanic-playbook inspector. CI installs Chromium and runs all three checks on Windows after the unit suite and production build.
+Playwright launches Electron with an isolated profile to check the desktop preload bridge and app version, exercises league-first PoB-to-character import plus a build-matched level checkpoint and a local stash snapshot that completes an exact gear goal, and runs the renderer in Chromium to inspect route-pack import through the cited mechanic-playbook inspector. CI installs Chromium and runs all three checks on Windows after the unit suite and production build, then preserves the stash and route screenshots as run artifacts; failure diagnostics are uploaded separately.
 
 `pnpm package:win` creates a portable Windows executable in `release/`.
 Windows downloads are unsigned for now. The preview channel publishes a SHA-256 checksum, so Windows may show an unknown-publisher warning. The signed stable-release workflow remains dormant unless signing is requested and configured.
@@ -60,6 +61,8 @@ The app does not inspect the game process, read game logs, or access or modify t
 ## Current integration limits
 
 GGG's official API describes OAuth-backed PoE 1 character, league, and stash access. As checked on 2026-10-05, GGG says it is unable to process new OAuth application registrations, so account sync cannot be activated for this new project yet. The UI explains this without blocking build import or analysis.
+
+The local stash importer reads only SSF Companion's small JSON snapshot schema. It is not a direct GGG API response importer and does not fetch, verify, or upload account data. Counts are player-provided; partial snapshots preserve unknowns for unlisted items.
 
 FilterBlade's [public `.options` documentation](https://github.com/NeverSinkDev/FilterBlade-Public-Assets/blob/main/README_OptionFile.md) defines its customizer UI and warns that rule IDs must stay stable for saved customizations. Its [PoE 1 customizer](https://www.filterblade.xyz/?game=Poe1) manages “My Modules” inside FilterBlade; no external per-player priority-import API has been verified. SSF Companion can audit a user-selected export and, for a narrow safe subset, create a separate `.filter` copy with matching existing `Show` rule bodies moved to the top. The audit can fetch current public PoE 1 Customizer labels from [NeverSink's public assets](https://github.com/NeverSinkDev/FilterBlade-Public-Assets/tree/main/FbPoe1Configs) only when requested; a local `.options` file remains available for offline or version-specific use. Generated copies are not validated by GGG and still need simulator/in-game review; they are not importable FilterBlade modules.
 

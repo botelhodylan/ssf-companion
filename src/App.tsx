@@ -31,6 +31,13 @@ import { buildPriorityPlan, serializePriorityPlan, type PriorityPlanFormat } fro
 import { rankItemsByRelevance } from "./core/relevance";
 import { shouldShowSampleBuilds } from "./core/sample-mode";
 import { parsePoe1RouteKnowledgePack } from "./core/poe1-route-pack";
+import {
+  countStashMatches,
+  createStashSnapshotTemplate,
+  MAX_LOCAL_STASH_SNAPSHOT_BYTES,
+  parseLocalStashSnapshot,
+  type ParsedLocalStashSnapshot,
+} from "./core/stash-snapshot";
 import { AccountSyncStrip } from "./components/AccountSyncStrip";
 import { AtlasTreesPage } from "./components/AtlasTreesPage";
 import { ExplanationPanel } from "./components/ExplanationPanel";
@@ -58,6 +65,13 @@ type StoredBuild = {
 };
 type StoredGoal = { buildId: string; goal: ItemGoal };
 type StoredPassiveSpecLevel = { buildId: string; specId: number; level: number };
+type StoredLeagueStash = ParsedLocalStashSnapshot & {
+  leagueId: string;
+  source: "manual";
+  version: string;
+  importedAt: string;
+  sourceFile: string;
+};
 const GITHUB_ISSUES_URL = "https://github.com/botelhodylan/ssf-companion/issues";
 
 const STORAGE = {
@@ -71,6 +85,7 @@ const STORAGE = {
   contact: "ssf-companion:pobb-contact:v2",
   legacyContact: "ssf-companion:pobb-contact:v1",
   passiveTreeData: "ssf-companion:passive-tree-data:v1",
+  stashSnapshots: "ssf-companion:league-stash-snapshots:v1",
   atlasTrees: "ssf-companion:atlas-trees:v1",
   atlasTreeData: "ssf-companion:atlas-tree-data:v1",
   routeKnowledgePack: "ssf-companion:route-knowledge-pack:v1",
@@ -223,6 +238,7 @@ export default function App() {
   );
   const [passiveTreeData, setPassiveTreeData] = useStoredValue<PassiveTreeDataset | null>(STORAGE.passiveTreeData, null);
   const [savedAtlasTrees, setSavedAtlasTrees] = useStoredValue<SavedAtlasTree[]>(STORAGE.atlasTrees, []);
+  const [stashSnapshots, setStashSnapshots] = useStoredValue<StoredLeagueStash[]>(STORAGE.stashSnapshots, []);
   const [atlasTreeDataset, setAtlasTreeDataset] = useStoredValue<AtlasTreeDataset | null>(STORAGE.atlasTreeData, null);
   const [storedRouteKnowledgePack, setRouteKnowledgePack] = useStoredValue<unknown>(STORAGE.routeKnowledgePack, null);
   const routeKnowledgePack = useMemo(() => {
@@ -249,6 +265,7 @@ export default function App() {
   const [filterBladeOptions, setFilterBladeOptions] = useState<FilterBladeCustomizerOptions | null>(null);
   const [filterBladeOptionsImporting, setFilterBladeOptionsImporting] = useState(false);
   const [filterBladeOptionsFetching, setFilterBladeOptionsFetching] = useState(false);
+  const [stashImportMessage, setStashImportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [importInput, setImportInput] = useState("");
   const [importing, setImporting] = useState(false);
@@ -268,6 +285,7 @@ export default function App() {
   const routeKnowledgePackFileInputRef = useRef<HTMLInputElement>(null);
   const filterFileInputRef = useRef<HTMLInputElement>(null);
   const filterBladeOptionsInputRef = useRef<HTMLInputElement>(null);
+  const stashSnapshotFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void window.ssfDesktop?.getAppVersion().then(setAppVersion).catch(() => undefined);
@@ -282,6 +300,7 @@ export default function App() {
   const selectedLeague = leagues.find((league) => league.id === selectedLeagueId);
   const leagueCharacters = characters.filter((character) => character.leagueId === selectedLeagueId);
   const selectedCharacter = leagueCharacters.find((character) => character.id === selectedCharacterId);
+  const selectedLeagueStash = stashSnapshots.find((snapshot) => snapshot.leagueId === selectedLeagueId);
 
   useEffect(() => {
     if (selectedCharacterId && !characters.some((character) => character.id === selectedCharacterId && character.leagueId === selectedLeagueId)) {
@@ -328,6 +347,7 @@ export default function App() {
     return buildProgressionRoute({
       build: selectedBuild,
       currentBuild: visibleBuilds.find((build) => build.role === "ACTIVE"),
+      stash: selectedLeagueStash,
       passiveTreeData,
       routeKnowledgePack,
       passiveSpecLevels: savedPassiveSpecLevels
@@ -340,7 +360,7 @@ export default function App() {
         ...(selectedCharacter?.level ? { characterLevel: selectedCharacter.level } : {}),
       },
     });
-  }, [selectedBuild, visibleBuilds, selectedCharacter, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData, routeKnowledgePack, savedPassiveSpecLevels]);
+  }, [selectedBuild, visibleBuilds, selectedCharacter, selectedLeagueStash, progressionStageConfirmed, sampleMode, routeStage, passiveTreeData, routeKnowledgePack, savedPassiveSpecLevels]);
   const selectedRouteStep = progressionRoute?.steps.find((step) => step.id === selectedRouteStepId)
     ?? progressionRoute?.steps[0];
 
@@ -352,7 +372,15 @@ export default function App() {
     ],
   })), [visibleBuilds, savedGoals]);
 
-  const candidates = useMemo(() => goalsForBuilds(buildsForScoring, sampleMode), [buildsForScoring, sampleMode]);
+  const candidates = useMemo(() => goalsForBuilds(buildsForScoring, sampleMode).map((candidate) => {
+    if (!selectedLeagueStash) return candidate;
+    const ownedCount = countStashMatches(selectedLeagueStash, {
+      names: [candidate.name],
+      ...(candidate.baseType ? { baseTypes: [candidate.baseType] } : {}),
+      tags: candidate.tags,
+    });
+    return ownedCount === undefined || ownedCount === 0 ? candidate : { ...candidate, ownedCount };
+  }), [buildsForScoring, sampleMode, selectedLeagueStash]);
   const ranked = useMemo(() => rankItemsByRelevance(candidates, buildsForScoring, { progressionStage: currentStage }), [candidates, buildsForScoring, currentStage]);
   const rows = useMemo<PriorityRow[]>(() => ranked.map((relevance) => {
     const candidate = candidates.find((item) => item.id === relevance.itemId) ?? {
@@ -396,6 +424,7 @@ export default function App() {
   }
 
   function handleLeagueSelection(value: string) {
+    setStashImportMessage(null);
     if (value === "__create") {
       setLeagueNameInput("");
       setDialog("league");
@@ -455,6 +484,7 @@ export default function App() {
     if (!duplicate) setLeagues((previous) => [...previous, league]);
     setSelectedLeagueId(league.id);
     setSelectedCharacterId("");
+    setStashImportMessage(null);
     setDialog(null);
   }
 
@@ -726,6 +756,72 @@ export default function App() {
       notify(error instanceof Error ? error.message : "The route knowledge pack could not be imported.");
     }
     event.target.value = "";
+  }
+
+  async function browserStashSnapshotChosen(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const league = selectedLeague;
+    try {
+      if (!league) throw new Error("Select a league before importing its stash snapshot.");
+      if (file.size > MAX_LOCAL_STASH_SNAPSHOT_BYTES) {
+        throw new Error("That stash snapshot exceeds the 1.5 MB import limit.");
+      }
+      const parsed = parseLocalStashSnapshot(await file.text(), league.name);
+      const snapshot: StoredLeagueStash = {
+        ...parsed,
+        leagueId: league.id,
+        source: "manual",
+        version: "local-stash-" + crypto.randomUUID(),
+        importedAt: new Date().toISOString(),
+        sourceFile: file.name,
+      };
+      setStashSnapshots((previous) => [
+        ...previous.filter((existing) => existing.leagueId !== league.id),
+        snapshot,
+      ]);
+      setStashImportMessage({
+        kind: "success",
+        text: "Imported " + snapshot.items.length + " item " + (snapshot.items.length === 1 ? "type" : "types") +
+          " into " + league.name + " as a player-provided " + snapshot.coverage + " snapshot.",
+      });
+    } catch (error) {
+      setStashImportMessage({
+        kind: "error",
+        text: error instanceof Error ? error.message : "The stash snapshot could not be imported.",
+      });
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function downloadStashSnapshotTemplate() {
+    if (!selectedLeague) {
+      notify("Select a league before creating its stash snapshot template.");
+      return;
+    }
+    const content = createStashSnapshotTemplate(selectedLeague.name);
+    if (window.ssfDesktop) {
+      try {
+        const result = await window.ssfDesktop.saveExport("ssf-stash-snapshot-template", content, "json");
+        if (result.saved) notify("League stash JSON template saved.");
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "The stash template could not be saved.");
+      }
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "ssf-stash-snapshot-template.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function clearLeagueStashSnapshot() {
+    if (!selectedLeague) return;
+    setStashSnapshots((previous) => previous.filter((snapshot) => snapshot.leagueId !== selectedLeague.id));
+    setStashImportMessage({ kind: "success", text: "Removed the local stash snapshot for " + selectedLeague.name + "." });
   }
 
   function acceptFilterFile(file: { name: string; content: string }) {
@@ -1293,8 +1389,16 @@ export default function App() {
     const snapshotNote = sampleMode
       ? "Example route. Import your own PoB build and set your current progression stage to start a personal plan."
       : selectedCharacter
-        ? "Current stage comes from your local character profile. Gear, passive nodes, stash, and Atlas state have not been synced."
-        : "Build target only. Your current character and league stash are not connected; choose a current stage to make the route more specific.";
+        ? "Current stage comes from your local character profile. " +
+          (selectedLeagueStash
+            ? "A player-provided " + selectedLeagueStash.coverage + " stash snapshot is loaded for " + (selectedLeague?.name ?? "the selected league") + ". "
+            : "No league stash snapshot is loaded. ") +
+          "Live gear, passive nodes, and Atlas state have not been synced."
+        : selectedLeagueStash
+          ? "Build target only. A player-provided " + selectedLeagueStash.coverage +
+            " stash snapshot is loaded for " + (selectedLeague?.name ?? "the selected league") +
+            "; current character stage, gear, passive nodes, and Atlas state are unknown."
+          : "Build target only. Your current character and league stash are not connected; choose a current stage to make the route more specific.";
 
     return (
       <div className="secondary-page route-page">
@@ -1753,6 +1857,66 @@ export default function App() {
                 : "No supported ACTIVE PoB is available in this profile. Import one from the Builds workspace first."}
           </div>
           <p className="modal-small-note">This creates a local snapshot from build data the player imported. It does not fetch live character state from GGG or prove the game character still matches the PoB.</p>
+        </section>
+        <section className="settings-section stash-snapshot-import" aria-label="League stash snapshot">
+          <div>
+            <span className="section-kicker">SELECTED LEAGUE STASH</span>
+            <h2>Import a local stash snapshot</h2>
+            <p>GGG account sync is not available yet. This player-authored JSON snapshot gives the route planner local item counts for gear goals and crafting materials. It stays on this device and is never uploaded.</p>
+          </div>
+          <div className="stash-snapshot-actions">
+            <button
+              className="button button-primary"
+              type="button"
+              disabled={!selectedLeague}
+              onClick={() => { setStashImportMessage(null); stashSnapshotFileInputRef.current?.click(); }}
+            >
+              <FolderOpen size={14} /> Import stash JSON
+            </button>
+            <button className="button button-outline" type="button" disabled={!selectedLeague} onClick={() => void downloadStashSnapshotTemplate()}>
+              <ArrowDownToLine size={14} /> Save JSON template
+            </button>
+            {selectedLeagueStash && (
+              <button className="text-link" type="button" onClick={clearLeagueStashSnapshot}>Remove this snapshot</button>
+            )}
+            <input
+              data-testid="stash-snapshot-input"
+              ref={stashSnapshotFileInputRef}
+              className="sr-only"
+              type="file"
+              accept=".json,application/json"
+              onChange={(event) => void browserStashSnapshotChosen(event)}
+            />
+          </div>
+          {selectedLeagueStash ? (
+            <div className="stash-snapshot-status" role="status">
+              <strong>{selectedLeagueStash.items.length} item {selectedLeagueStash.items.length === 1 ? "type" : "types"} · {selectedLeagueStash.coverage} coverage</strong>
+              <span>{selectedLeagueStash.sourceFile} · imported {new Date(selectedLeagueStash.importedAt).toLocaleString()}</span>
+              <details className="stash-snapshot-items">
+                <summary>Review first {Math.min(20, selectedLeagueStash.items.length)} item counts</summary>
+                <ul>
+                  {selectedLeagueStash.items.slice(0, 20).map((item) => (
+                    <li key={item.name + ":" + (item.baseType ?? "")}>
+                      <span>{item.name}{item.baseType && item.baseType !== item.name ? " · " + item.baseType : ""}</span>
+                      <strong>× {item.quantity}</strong>
+                    </li>
+                  ))}
+                </ul>
+                {selectedLeagueStash.items.length > 20 && <small>Showing 20 of {selectedLeagueStash.items.length}; all validated counts are used by the route planner.</small>}
+              </details>
+            </div>
+          ) : (
+            <div className="stash-snapshot-status is-empty" role="status">
+              <strong>{selectedLeague ? "No stash snapshot for " + selectedLeague.name : "Select a league first"}</strong>
+              <span>League stash snapshots are kept separate from each character.</span>
+            </div>
+          )}
+          {stashImportMessage && (
+            <div className={"stash-import-message stash-import-" + stashImportMessage.kind} role="status">
+              {stashImportMessage.text}
+            </div>
+          )}
+          <p className="modal-small-note">The template uses the SSF Companion schema, not a direct GGG API response. “Partial” means unlisted items are unknown; choose “complete” only when the file covers all stash tabs you want counted. Only exact supplied names, base types, and tags can match route items.</p>
         </section>
         <section className="settings-section">
           <div>

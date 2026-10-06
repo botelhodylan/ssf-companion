@@ -32,6 +32,15 @@ jobs:
         run: pnpm exec playwright install chromium
       - name: Run desktop UI smoke test
         run: pnpm test:e2e
+      - name: Save Playwright UI screenshots
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-ui-screenshots
+          path: |
+            test-results/**/league-stash-import.png
+            test-results/**/current-character-route.png
+          if-no-files-found: ignore
       - name: Save Playwright diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
