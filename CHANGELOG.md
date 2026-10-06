@@ -4,10 +4,13 @@ This project follows a simple release history. Changes are grouped by version; G
 
 ## Unreleased
 
+## 0.2.1 Preview
+
 - Keep bundled example builds out of a player profile after they create a league or character, or import a build.
 - Add a local, patch-versioned PoE 1 route pack importer for exact-match acquisition routes, Atlas share setups, and sourced step-by-step craft plans.
 - Support source-cited league-mechanic playbooks linked to exact acquisition routes, with setup steps, encounter loops, decision rules, and stop conditions.
-- Add Playwright checks for Electron startup, league-first PoB character import, and route-pack/playbook inspection in Chromium; accept lettered PoE hotfix versions and show playbook prerequisites and stop conditions.
+- Add source-backed level checkpoints to route packs, matched by exact build class, ascendancy, and/or main skill, and mark the next checkpoint from the selected character's level. Checkpoints can reference named PoB passive specs and GGG Atlas shares.
+- Add Playwright checks for Electron startup, league-first PoB character import, build progression checkpoints, and route-pack/playbook inspection in Chromium; accept lettered PoE hotfix versions and show playbook prerequisites and stop conditions.
 
 ## 0.2.0 Preview
 

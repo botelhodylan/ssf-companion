@@ -60,7 +60,7 @@ jobs:
 
             This build is intentionally unsigned. Windows may show an unknown-publisher warning. Verify `SHA256SUMS.txt` before running it.
 
-            The app can import PoB/pobb.in/Maxroll builds, make a reviewed local character snapshot from an ACTIVE PoB, import Atlas share trees, analyze build-aware loot priorities, and generate a bounded FilterBlade-style filter copy. Full patch-versioned farming/crafting routes and live GGG account sync are not available yet.
+            The app can import PoB/pobb.in/Maxroll builds, make a reviewed local character snapshot from an ACTIVE PoB, import Atlas share trees, analyze build-aware loot priorities, and generate a bounded FilterBlade-style filter copy. Imported, source-backed route packs can provide build-matched level checkpoints and farming/crafting/mechanic guidance; no reviewed progression guide is bundled yet. Live GGG account sync is unavailable while new OAuth applications cannot be registered.
           files: |
             release/SSF-Companion-*-portable.exe
             release/SHA256SUMS.txt

@@ -6,7 +6,7 @@ This is an early open-source build. The initial distribution target is a portabl
 
 ## Download
 
-The [0.2.0 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.0/SSF-Companion-0.2.0-portable.exe) is available now. Verify it with the accompanying [SHA-256 checksum](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.0/SHA256SUMS.txt). This early preview is not signed and does not yet include complete patch-versioned farming, crafting, or endgame routes.
+The [0.2.1 unsigned Windows preview](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.1/SSF-Companion-0.2.1-portable.exe) is available now. Verify it with the accompanying [SHA-256 checksum](https://github.com/botelhodylan/ssf-companion/releases/download/preview-v0.2.1/SHA256SUMS.txt). This early preview is not signed and does not bundle a complete patch-versioned progression guide or full endgame route.
 
 ## Current slice
 
