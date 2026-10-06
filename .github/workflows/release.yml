@@ -145,7 +145,7 @@ jobs:
           $expected = (Get-Content signed/SHA256SUMS.txt -Raw).Trim().Split(' ')[0]
           $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset.FullName).Hash.ToLowerInvariant()
           if ($expected -ne $actual) { throw "Release executable does not match its published SHA-256 checksum." }
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: |
