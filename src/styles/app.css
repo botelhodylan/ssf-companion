@@ -811,8 +811,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .passive-allocation-complete > div > span { color: #a9bf91; }
 .passive-allocation-partial > div > span { color: #d6ad70; }
 .passive-allocation-order > p { margin: 5px 0 0; color: #89918a; font-size: 8px; line-height: 1.5; }
+.passive-allocation-order > .passive-allocation-checkpoint-note { color: #aaa08d; }
 .passive-allocation-order details { margin-top: 7px; color: #a7aaa2; font-size: 9px; line-height: 1.5; }
 .passive-allocation-order summary { color: #c7a16f; cursor: pointer; }
+.passive-allocation-order .passive-allocation-checkpoint { margin-left: 8px; padding-left: 8px; border-left: 1px solid #554832; }
+.passive-allocation-order .passive-allocation-checkpoint summary { color: #d0b77f; }
 .passive-allocation-order ol { display: flex; flex-direction: column; gap: 3px; max-height: 260px; overflow: auto; margin: 6px 0 0; padding: 0 6px 0 24px; }
 .passive-allocation-order li { padding: 4px 5px; border-left: 1px solid #554832; background: #1e2424; }
 .passive-allocation-order li::marker { color: #bc995f; }

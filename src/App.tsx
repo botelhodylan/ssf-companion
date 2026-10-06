@@ -1356,7 +1356,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <input ref={passiveTreeFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserPassiveTreeFileChosen(event)} />
+              <input data-testid="passive-tree-input" ref={passiveTreeFileInputRef} className="sr-only" type="file" accept=".json,application/json" onChange={(event) => void browserPassiveTreeFileChosen(event)} />
               <p className="route-tree-data-note">The app stores only relevant PoB node labels and links on this device. It does not include GGG tree data in the installer.</p>
             </section>
 
@@ -1424,14 +1424,30 @@ export default function App() {
                               <span>{selectedRouteStep.passiveTree.allocationOrderStatus}</span>
                             </div>
                             <p>{selectedRouteStep.passiveTree.allocationOrderNote}</p>
+                            {selectedRouteStep.passiveTree.allocationCheckpoints?.length ? (
+                              <p className="passive-allocation-checkpoint-note">Checkpoint groups contain up to ten nodes from this traversal. They are for review; they do not assign character levels or respec timing.</p>
+                            ) : null}
                             {selectedRouteStep.passiveTree.allocationOrder?.length ? (
                               <details>
-                                <summary>View {selectedRouteStep.passiveTree.allocationOrder.length} ordered nodes</summary>
-                                <ol>{selectedRouteStep.passiveTree.allocationOrder.map((node, index) => (
-                                  <li key={`${node.id}-${index}`}>
-                                    <span>{node.name ?? node.stats[0] ?? `Node ${node.id}`}</span><small>#{node.id}{node.kind ? ` · ${node.kind}` : ""}</small>
-                                  </li>
-                                ))}</ol>
+                                <summary>View {selectedRouteStep.passiveTree.allocationCheckpoints?.length ?? 1} traversal checkpoint{selectedRouteStep.passiveTree.allocationCheckpoints?.length === 1 ? "" : "s"} · {selectedRouteStep.passiveTree.allocationOrder.length} nodes</summary>
+                                {selectedRouteStep.passiveTree.allocationCheckpoints?.length ? (
+                                  selectedRouteStep.passiveTree.allocationCheckpoints.map((checkpoint) => (
+                                    <details className="passive-allocation-checkpoint" key={checkpoint.number}>
+                                      <summary>Checkpoint {checkpoint.number} · nodes {checkpoint.firstNodeIndex}–{checkpoint.lastNodeIndex}</summary>
+                                      <ol>{checkpoint.nodes.map((node, index) => (
+                                        <li key={`${node.id}-${index}`}>
+                                          <span>{node.name ?? node.stats[0] ?? `Node ${node.id}`}</span><small>#{node.id}{node.kind ? ` · ${node.kind}` : ""}</small>
+                                        </li>
+                                      ))}</ol>
+                                    </details>
+                                  ))
+                                ) : (
+                                  <ol>{selectedRouteStep.passiveTree.allocationOrder.map((node, index) => (
+                                    <li key={`${node.id}-${index}`}>
+                                      <span>{node.name ?? node.stats[0] ?? `Node ${node.id}`}</span><small>#{node.id}{node.kind ? ` · ${node.kind}` : ""}</small>
+                                    </li>
+                                  ))}</ol>
+                                )}
                               </details>
                             ) : null}
                           </div>

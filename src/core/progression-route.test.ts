@@ -471,6 +471,46 @@ describe("buildProgressionRoute", () => {
     expect(step?.passiveTree?.allocationOrderNote).toContain("list is incomplete");
   });
 
+  it("groups long passive traversals into ten-node review checkpoints", () => {
+    const currentBuild: BuildManifest = {
+      ...BUILD,
+      role: "ACTIVE",
+      passiveSpecs: [{ id: 1, treeVersion: "3_26", isActive: true, allocatedNodeIds: [1, 2] }],
+    };
+    const targetBuild: BuildManifest = {
+      ...BUILD,
+      role: "NEXT",
+      passiveSpecs: [{ id: 2, treeVersion: "3_26", isActive: true, allocatedNodeIds: Array.from({ length: 14 }, (_, index) => index + 1) }],
+    };
+    const nodes = Object.fromEntries(Array.from({ length: 14 }, (_, index) => {
+      const id = index + 1;
+      return [String(id), {
+        id,
+        name: `Node ${id}`,
+        stats: [],
+        neighbors: [id - 1, id + 1].filter((neighbor) => neighbor > 0 && neighbor <= 14),
+      }];
+    }));
+    const passiveTreeData = {
+      treeVersion: "3_26",
+      sourceFile: "data.json",
+      importedAt: "2026-10-05T00:00:00.000Z",
+      nodes,
+    };
+    const step = buildProgressionRoute({ build: targetBuild, currentBuild, progression: PROGRESSION, passiveTreeData })
+      .steps.find((item) => item.kind === "passive_tree");
+
+    expect(step?.passiveTree?.allocationOrder?.map((node) => node.id)).toEqual(Array.from({ length: 12 }, (_, index) => index + 3));
+    expect(step?.passiveTree?.allocationCheckpoints?.map((checkpoint) => ({
+      number: checkpoint.number,
+      range: [checkpoint.firstNodeIndex, checkpoint.lastNodeIndex],
+      ids: checkpoint.nodes.map((node) => node.id),
+    }))).toEqual([
+      { number: 1, range: [1, 10], ids: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+      { number: 2, range: [11, 12], ids: [13, 14] },
+    ]);
+  });
+
   it("withholds target order when class-start or imported tree topology is unavailable", () => {
     const targetBuild: BuildManifest = {
       ...BUILD,

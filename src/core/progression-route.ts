@@ -3,7 +3,7 @@ import { orderPassiveTreeAllocations, type PassiveNodeFact, type PassiveTreeData
 import { acquisitionRoutesForGoal, craftPlanForGoal, mechanicPlanById, type Poe1RouteKnowledgePack, type Poe1RouteKnowledgePlan } from "./poe1-route-pack";
 import type { BuildManifest, BuildRole, BuildSkillGroup, EquipmentItemDetailFacts, EquippedItemFact, ItemGoal, ProgressionStage } from "./types";
 
-export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.6.0" as const;
+export const POE1_ROUTE_RULES_VERSION = "poe1-route-v1.7.0" as const;
 
 export type RouteEvidenceSource =
   | "route_rules"
@@ -46,9 +46,18 @@ export interface PassiveTreeComparison {
   readonly removedNodes?: readonly PassiveNodeFact[];
   /** Deterministic graph traversal from retained nodes or the class start. */
   readonly allocationOrder?: readonly PassiveNodeFact[];
+  /** Display-only groups of at most ten nodes from the deterministic traversal. */
+  readonly allocationCheckpoints?: readonly PassiveTreeAllocationCheckpoint[];
   readonly allocationOrderStatus: "complete" | "partial" | "unavailable";
   readonly allocationOrderMissingNodeIds?: readonly number[];
   readonly allocationOrderNote: string;
+}
+
+export interface PassiveTreeAllocationCheckpoint {
+  readonly number: number;
+  readonly firstNodeIndex: number;
+  readonly lastNodeIndex: number;
+  readonly nodes: readonly PassiveNodeFact[];
 }
 
 export interface EquipmentSlotComparison {
@@ -175,6 +184,8 @@ export interface ProgressionRoute {
   readonly dataVersion: ProgressionRouteDataVersion;
   readonly steps: readonly ProgressionRouteStep[];
 }
+
+const PASSIVE_TREE_CHECKPOINT_SIZE = 10;
 
 const STAGE_LABEL: Readonly<Record<ProgressionStage, string>> = {
   campaign: "Campaign",
@@ -986,6 +997,7 @@ function buildPassiveTreeSteps(input: {
     const allocationOrderNodes = allocationResult.nodeIds.map((nodeId) =>
       passiveTreeData?.nodes[String(nodeId)] ?? { id: nodeId, stats: [] },
     );
+    const allocationCheckpoints = createPassiveTreeAllocationCheckpoints(allocationOrderNodes);
     const requiredData: RouteDataRequirement[] = [];
 
     if (allocationResult.status === "unavailable") {
@@ -1025,6 +1037,7 @@ function buildPassiveTreeSteps(input: {
       ...(addedNodes ? { addedNodes } : {}),
       ...(removedNodes ? { removedNodes } : {}),
       ...(allocationOrderNodes.length ? { allocationOrder: allocationOrderNodes } : {}),
+      ...(allocationCheckpoints.length ? { allocationCheckpoints } : {}),
       allocationOrderStatus: allocationResult.status,
       ...(allocationResult.missingNodeIds.length ? { allocationOrderMissingNodeIds: allocationResult.missingNodeIds } : {}),
       allocationOrderNote: allocationResult.note,
@@ -1094,6 +1107,22 @@ function buildPassiveTreeSteps(input: {
       passiveTree,
     };
   });
+}
+
+function createPassiveTreeAllocationCheckpoints(
+  nodes: readonly PassiveNodeFact[],
+): PassiveTreeAllocationCheckpoint[] {
+  const checkpoints: PassiveTreeAllocationCheckpoint[] = [];
+  for (let offset = 0; offset < nodes.length; offset += PASSIVE_TREE_CHECKPOINT_SIZE) {
+    const group = nodes.slice(offset, offset + PASSIVE_TREE_CHECKPOINT_SIZE);
+    checkpoints.push({
+      number: checkpoints.length + 1,
+      firstNodeIndex: offset + 1,
+      lastNodeIndex: offset + group.length,
+      nodes: group,
+    });
+  }
+  return checkpoints;
 }
 
 function passiveNodeLabel(node: PassiveNodeFact): string {

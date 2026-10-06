@@ -66,6 +66,38 @@ test("imports a PoB into a league character and opens its progression route", as
   await expect(inspector).toContainText("Imported Path of Building tree");
   await expect(inspector).toContainText("3 target node IDs");
   await expect(inspector).toContainText("3_26");
+
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Loot filter" }).click();
+  await page.getByRole("tab", { name: /NEXT/ }).click();
+  const targetPobXml = syntheticPobXml
+    .replace("Synthetic Winter Orb Witch", "Synthetic Winter Orb Transition")
+    .replace("nodes=\"100,101,102\"", `nodes=\"${Array.from({ length: 14 }, (_, index) => 100 + index).join(",")}\"`);
+  await page.locator("#build-import").fill(targetPobXml);
+  await page.getByRole("button", { name: "Import build" }).click();
+  await expect(page.getByRole("region", { name: "Import a build" }).getByRole("status"))
+    .toContainText("Imported Synthetic Winter Orb Transition");
+
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Progression route" }).click();
+  const treeNodes: Record<string, { skill: number; name: string; stats: string[]; in?: string[]; out?: string[]; classStartIndex?: number }> = Object.fromEntries(Array.from({ length: 14 }, (_, index) => {
+    const id = 100 + index;
+    return [String(id), { skill: id, name: `Node ${id}`, stats: [], in: index > 0 ? [String(id - 1)] : ["99"], out: index < 13 ? [String(id + 1)] : [] }];
+  }));
+  treeNodes["99"] = { skill: 99, name: "WITCH", stats: [], classStartIndex: 0, out: ["100"] };
+  await page.getByTestId("passive-tree-input").setInputFiles({
+    name: "synthetic-tree-3_26.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ classes: [{ name: "Witch" }], nodes: treeNodes })),
+  });
+  await expect(page.getByRole("region", { name: "Local passive tree data" }).getByRole("status"))
+    .toContainText("tree 3_26");
+  const targetPassiveStep = page.getByRole("button", { name: /PoB tree spec: Atlas/ });
+  await targetPassiveStep.click();
+  await expect(inspector).toContainText("up to ten nodes from this traversal");
+  await inspector.getByText("View 2 traversal checkpoints · 11 nodes").click();
+  await inspector.getByText("Checkpoint 1 · nodes 1–10").click();
+  await expect(inspector).toContainText("Node 112");
+  await inspector.getByText("Checkpoint 2 · nodes 11–11").click();
+  await expect(inspector).toContainText("Node 113");
   expect(browserErrors).toEqual([]);
   expect(externalRequests).toEqual([]);
 
